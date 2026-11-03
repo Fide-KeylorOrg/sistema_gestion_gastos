@@ -1,15 +1,20 @@
 TEST_DATABASE_URL := postgresql://gastos:gastos@localhost:5434/gastos_test
 
-.PHONY: install up down migrate seed dev build lint test reset
+.PHONY: install up down app migrate seed dev build lint test reset
 
 install:
 	npm install
 
 up:
-	docker compose up -d --wait
+	docker compose up -d --wait db
 
 down:
-	docker compose down
+	docker compose --profile app down
+
+# Production image, same as AWS: builds, runs migrations, then serves on http://localhost:3100
+app:
+	docker compose --profile app up -d --build --wait app
+	@echo "App: http://localhost:3100"
 
 # make migrate name=add_employees  creates and applies a new migration after editing prisma/schema.prisma
 migrate: up

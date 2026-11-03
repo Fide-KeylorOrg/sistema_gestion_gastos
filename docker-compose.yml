@@ -15,5 +15,30 @@ services:
       timeout: 3s
       retries: 15
 
+  # The "app" profile runs the production image (same as AWS); `make dev` only needs db.
+  migrate:
+    profiles: [app]
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://gastos:gastos@db:5432/gastos
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    profiles: [app]
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: postgresql://gastos:gastos@db:5432/gastos
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   db-data:
