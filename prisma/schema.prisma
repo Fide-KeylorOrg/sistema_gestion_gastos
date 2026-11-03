@@ -59,3 +59,170 @@ model AuditLog {
   @@index([at])
   @@index([actorId])
 }
+
+// ---------- Payroll ----------
+// Money is Decimal(14,2) in colones. Business dates are @db.Date (no time zone shifts).
+// CHECK and EXCLUDE constraints Prisma can't express live in the add_payroll_and_expenses migration.
+
+enum IdType {
+  NATIONAL_ID // cédula física
+  DIMEX
+  PASSPORT
+}
+
+enum SalaryBasis {
+  MONTHLY
+  HOURLY
+}
+
+// Current terms only. Past values live in the AuditLog and in each PayrollLine snapshot.
+model Employee {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  idType          IdType
+  idNumber        String
+  firstName       String
+  lastName1       String
+  lastName2       String?
+  birthDate       DateTime      @db.Date
+  email           String?
+  phone           String?
+  address         String?
+  position        String
+  hireDate        DateTime      @db.Date
+  active          Boolean       @default(true)
+  statusChangedAt DateTime?     @db.Date
+  statusReason    String?
+  salaryBasis     SalaryBasis
+  baseSalary      Decimal       @db.Decimal(14, 2)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  payrollLines    PayrollLine[]
+
+  @@unique([idType, idNumber])
+}
+
+// Paid biweekly. Draft until closedAt is set; closed payrolls are never recalculated.
+model Payroll {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  periodStart DateTime      @db.Date
+  periodEnd   DateTime      @db.Date
+  closedAt    DateTime?     @db.Timestamptz(3)
+  paidAt      DateTime?     @db.Date
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  lines       PayrollLine[]
+}
+
+// Snapshot of the salary terms used, so later changes to Employee never alter this payroll.
+model PayrollLine {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  payrollId   String        @db.Uuid
+  payroll     Payroll       @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  employeeId  String        @db.Uuid
+  employee    Employee      @relation(fields: [employeeId], references: [id])
+  salaryBasis SalaryBasis
+  baseSalary  Decimal       @db.Decimal(14, 2)
+  items       PayrollItem[]
+
+  @@unique([payrollId, employeeId])
+  @@index([employeeId])
+}
+
+enum PayrollItemKind {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+}
+
+// One row per concept on the pay slip. Gross, deductions and net are sums by kind, never stored.
+// code values (e.g. ORDINARY, OVERTIME, CCSS_EMPLOYEE) get defined with the payroll calculation rules.
+model PayrollItem {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  lineId      String          @db.Uuid
+  line        PayrollLine     @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  kind        PayrollItemKind
+  code        String
+  description String
+  quantity    Decimal?        @db.Decimal(10, 2)
+  rate        Decimal?        @db.Decimal(12, 6)
+  amount      Decimal         @db.Decimal(14, 2)
+
+  @@index([lineId])
+}
+
+// ---------- Expenses ----------
+
+// Names are unique ignoring case; the app checks with mode: "insensitive" before writing.
+model ExpenseCategory {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  name      String    @unique
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  expenses  Expense[]
+}
+
+enum ExpenseKind {
+  PAYMENT
+  PERMIT // sanitary / commercial permits: the due date is the expiry date
+}
+
+enum Recurrence {
+  NONE
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  BIMONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  YEARLY
+}
+
+// What is owed and how often. Each date it falls due is an ExpenseDue; only the next one is created ahead of time.
+model Expense {
+  id               String          @id @default(uuid(7)) @db.Uuid
+  concept          String
+  categoryId       String          @db.Uuid
+  category         ExpenseCategory @relation(fields: [categoryId], references: [id])
+  kind             ExpenseKind     @default(PAYMENT)
+  estimatedAmount  Decimal         @db.Decimal(14, 2)
+  referenceNumber  String?
+  notes            String?
+  recurrence       Recurrence      @default(NONE)
+  recurrenceEndsOn DateTime?       @db.Date
+  notifyDaysBefore Int?            @default(7) // null = notifications off
+  extraRecipients  String[]
+  deletedAt        DateTime?       @db.Timestamptz(3)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  dues             ExpenseDue[]
+
+  @@index([categoryId])
+}
+
+// Status is derived: paid if paidAt is set, overdue if dueDate < today, otherwise pending.
+model ExpenseDue {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  expenseId       String            @db.Uuid
+  expense         Expense           @relation(fields: [expenseId], references: [id])
+  dueDate         DateTime          @db.Date
+  estimatedAmount Decimal           @db.Decimal(14, 2) // copied from Expense, so later edits don't rewrite history
+  paidAt          DateTime?         @db.Date
+  paidAmount      Decimal?          @db.Decimal(14, 2)
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
+  notifications   NotificationLog[]
+
+  @@unique([expenseId, dueDate])
+  @@index([dueDate])
+}
+
+model NotificationLog {
+  id         BigInt     @id @default(autoincrement())
+  dueId      String     @db.Uuid
+  due        ExpenseDue @relation(fields: [dueId], references: [id])
+  sentAt     DateTime   @default(now()) @db.Timestamptz(3)
+  recipients String[]
+
+  @@index([dueId])
+}
