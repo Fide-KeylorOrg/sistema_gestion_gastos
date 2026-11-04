@@ -1,3 +1,5 @@
-export default function Loading() {
-  return <p>Cargando…</p>;
+import { Loading } from "@/components/ui/feedback";
+
+export default function AppLoading() {
+  return <Loading />;
 }
