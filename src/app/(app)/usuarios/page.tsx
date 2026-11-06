@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/auth";
+import { UsersListView } from "@/features/users/components/users-list-view";
 
 export default async function UsuariosPage() {
   await requirePermission("users.manage");
-  return <h1>Usuarios y roles</h1>;
+  return <UsersListView />;
 }

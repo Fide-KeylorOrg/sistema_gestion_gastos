@@ -9,5 +9,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|logout|_next/static|_next/image|favicon.ico).*)"],
+  // logo.png debe poder pedirse sin sesión: la pantalla de inicio de sesión lo muestra.
+  matcher: ["/((?!login|logout|_next/static|_next/image|favicon.ico|logo.png).*)"],
 };
