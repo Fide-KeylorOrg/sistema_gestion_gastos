@@ -36,7 +36,7 @@ export function LiquidationView() {
   }
   const reset = () => { setV({ employeeId: "", exitDate: "", exitReason: "" }); setErrors({}); setResult(null); };
 
-  if (!can("planilla.infoSalarial")) return <><PageHeader title="Cálculo de liquidación laboral" /><SalaryRestricted /></>;
+  if (!can("payroll.salaries")) return <><PageHeader title="Cálculo de liquidación laboral" /><SalaryRestricted /></>;
   return (
     <>
       <PageHeader title="Cálculo de liquidación laboral" subtitle="Desglose y total correspondiente a la salida de un empleado." />

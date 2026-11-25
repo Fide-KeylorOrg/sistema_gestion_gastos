@@ -42,7 +42,7 @@ export function parseExpenseForm(v: ExpenseFormValues): { errors: FieldErrors; i
   if (v.notify) {
     const n = parseNumber(v.notifyDays);
     if (isBlank(v.notifyDays)) errors.notifyDays = MSG.required;
-    else if (n === null || !Number.isInteger(n) || n < 0 || n > 365) errors.notifyDays = "Indique un número entero de días entre 0 y 365.";
+    else if (n === null || !Number.isInteger(n) || n < 1 || n > 10) errors.notifyDays = "Indique un número entero de días entre 1 y 10.";
     else notifyDays = n;
   }
   const recipients = parseRecipients(v.recipients);
@@ -76,6 +76,9 @@ export function parsePaymentForm(v: { paidAt: string; amount: string }): { error
   else if (!isValidDate(v.paidAt)) errors.paidAt = MSG.date;
   return Object.keys(errors).length ? { errors } : { errors, paidAt: v.paidAt as ISODate, amount: amount! };
 }
+
+/** HU-39: anular un pago exige motivo. */
+export const validateVoidReason = (reason: string): FieldErrors => (isBlank(reason) ? { reason: "Indique el motivo de la anulación." } : {});
 
 export function validateCategory(name: string): FieldErrors {
   return isBlank(name) ? { name: "El nombre de la categoría es obligatorio." } : {};

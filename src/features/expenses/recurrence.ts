@@ -1,7 +1,7 @@
 import { addDays, toISO, type ISODate } from "@/lib/format";
 import type { Recurrence } from "./types";
 
-const MONTHS_STEP: Partial<Record<Recurrence, number>> = { MONTHLY: 1, BIMONTHLY: 2, QUARTERLY: 3, SEMIANNUAL: 6, YEARLY: 12 };
+const MONTHS_STEP: Partial<Record<Recurrence, number>> = { MONTHLY: 1, QUARTERLY: 3, SEMIANNUAL: 6, YEARLY: 12 };
 
 /**
  * Siguiente fecha de vencimiento según la frecuencia (HU-40, HU-44). Aritmética de calendario simple;

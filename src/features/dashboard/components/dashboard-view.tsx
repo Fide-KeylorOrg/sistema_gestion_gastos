@@ -24,7 +24,7 @@ export function DashboardView() {
 
   return (
     <>
-      <PageHeader title="Inicio" subtitle={`Resumen administrativo · fecha de referencia de la demostración: ${formatDate(DEMO_TODAY)}`} actions={can("gastos.crear") && <Button href="/gastos/nuevo" icon="add_circle">Registrar gasto</Button>} />
+      <PageHeader title="Inicio" subtitle={`Resumen administrativo · fecha de referencia de la demostración: ${formatDate(DEMO_TODAY)}`} actions={can("expenses.edit") && <Button href="/gastos/nuevo" icon="add_circle">Registrar gasto</Button>} />
       <div className="mb-4"><DemoNotice /></div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -48,8 +48,8 @@ export function DashboardView() {
                 <li key={u.payrollId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                   <div><div className="mb-1 flex items-center gap-2"><span className="tnum rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">{formatDate(u.date)}</span><Badge tone="info">Pago de planilla</Badge></div>
                     <p className="font-semibold text-slate-900">{u.label}</p><p className="text-xs text-slate-500">{u.employeeCount} colaboradores</p></div>
-                  <div className="text-right"><p className="tnum font-bold text-slate-900">{can("dashboard.infoSalarial") ? formatCRC(u.total ?? 0) : <SalaryRestricted inline />}</p>
-                    {can("planilla.consultar") && can("dashboard.infoSalarial") ? <Link className="text-sm font-medium text-blue-700 hover:underline" href={`/planilla/${u.payrollId}`}>Ver detalle</Link> : <span className="text-xs text-slate-500">Sin permiso para ver el detalle salarial</span>}</div>
+                  <div className="text-right"><p className="tnum font-bold text-slate-900">{can("payroll.salaries") ? formatCRC(u.total ?? 0) : <SalaryRestricted inline />}</p>
+                    {can("payroll.view") && can("payroll.salaries") ? <Link className="text-sm font-medium text-blue-700 hover:underline" href={`/planilla/${u.payrollId}`}>Ver detalle</Link> : <span className="text-xs text-slate-500">Sin permiso para ver el detalle salarial</span>}</div>
                 </li>
               ))}
             </ul>
@@ -100,8 +100,8 @@ function Comparison() {
         <Picker label="Período B" mode={mode} value={b} years={years} onChange={(p) => set("b", p)} id="pb" />
       </div>
       {same && <Alert tone="warning" className="mb-4">Seleccione dos períodos distintos para comparar.</Alert>}
-      <Tabs label="Tipo de comparación" value={tab} onChange={setTab} tabs={[{ id: "gastos", label: "Gastos administrativos" }, { id: "planilla", label: can("dashboard.infoSalarial") ? "Costo de planilla y horas extra" : "Costo de planilla y horas extra (restringido)" }]} />
-      <div className="mt-4">{tab === "gastos" ? <ExpenseComparisonPanel mode={mode} a={a} b={b} /> : can("dashboard.infoSalarial") ? <PayrollComparisonPanel mode={mode} a={a} b={b} /> : <SalaryRestricted />}</div>
+      <Tabs label="Tipo de comparación" value={tab} onChange={setTab} tabs={[{ id: "gastos", label: "Gastos administrativos" }, { id: "planilla", label: can("payroll.salaries") ? "Costo de planilla y horas extra" : "Costo de planilla y horas extra (restringido)" }]} />
+      <div className="mt-4">{tab === "gastos" ? <ExpenseComparisonPanel mode={mode} a={a} b={b} /> : can("payroll.salaries") ? <PayrollComparisonPanel mode={mode} a={a} b={b} /> : <SalaryRestricted />}</div>
     </Card>
   );
 }

@@ -50,7 +50,7 @@ function NoveltiesTab({ payrollId, closed }: { payrollId: string; closed: boolea
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ServerPending>El valor asociado a cada registro y la actualización de la planilla los calcula el servidor.</ServerPending>
-        {!closed && can("planilla.crear") && <Button icon="add_circle" onClick={() => setModal({ payrollId })}>Registrar horas y permisos</Button>}
+        {!closed && can("payroll.edit") && <Button icon="add_circle" onClick={() => setModal({ payrollId })}>Registrar horas y permisos</Button>}
       </div>
       {closed && <Alert tone="info">La planilla de este período está cerrada: sus registros no se pueden modificar.</Alert>}
       {q.loading ? <Loading /> : !q.data?.length ? <EmptyState message="No hay registros de horas o permisos para este período." /> : (
@@ -58,7 +58,7 @@ function NoveltiesTab({ payrollId, closed }: { payrollId: string; closed: boolea
           <THead><Th>Fecha</Th><Th>Colaborador</Th><Th>Tipo</Th><Th numeric>Cantidad</Th><Th>Observación</Th><Th>Estado</Th><Th className="text-right">Acciones</Th></THead>
           <tbody>{q.data.map((n) => (
             <Tr key={n.id}><Td className="tnum">{formatDate(n.date)}</Td><Td className="font-medium text-slate-900">{n.employeeName}</Td><Td>{NOVELTY_TYPE_LABEL[n.type]}</Td><Td numeric>{n.quantity} {NOVELTY_UNIT[n.type]}</Td><Td>{n.note ?? "—"}</Td><Td>{n.cancelled ? <Badge tone="neutral">Anulado</Badge> : <Badge tone="success">Registrado</Badge>}</Td>
-              <Td className="text-right">{!closed && !n.cancelled && can("planilla.editar") && <div className="flex justify-end gap-1"><Button variant="ghost" className="h-8 px-2" icon="edit" onClick={() => setModal({ record: n })}>Modificar</Button><Button variant="ghost" className="h-8 px-2 text-red-600" icon="block" onClick={() => { setProblem(null); setCancelId(n.id); }}>Anular</Button></div>}</Td></Tr>))}</tbody>
+              <Td className="text-right">{!closed && !n.cancelled && can("payroll.edit") && <div className="flex justify-end gap-1"><Button variant="ghost" className="h-8 px-2" icon="edit" onClick={() => setModal({ record: n })}>Modificar</Button><Button variant="ghost" className="h-8 px-2 text-red-600" icon="block" onClick={() => { setProblem(null); setCancelId(n.id); }}>Anular</Button></div>}</Td></Tr>))}</tbody>
         </Table></TableWrap>
       )}
       <NoveltyModal state={modal} onClose={() => setModal(null)} />
@@ -73,7 +73,7 @@ function SlipsTab({ payrollId }: { payrollId: string }) {
   const { can } = useSession();
   const toast = useToast();
   const [slip, setSlip] = useState<string | null>(null);
-  if (!can("planilla.infoSalarial")) return <SalaryRestricted />;
+  if (!can("payroll.salaries")) return <SalaryRestricted />;
   if (q.loading) return <Loading />;
   if (!q.data) return <EmptyState message="La planilla no existe." />;
   return (

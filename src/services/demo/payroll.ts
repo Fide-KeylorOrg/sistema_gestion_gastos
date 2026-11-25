@@ -1,4 +1,5 @@
 import { fail, ok } from "@/lib/result";
+import { addDays } from "@/lib/format";
 import type { PayrollService } from "../contracts";
 import { lineTotals, NOVELTY_MAX, NOVELTY_UNIT, type GlobalRate, type PayrollItem, type PayrollLine } from "@/features/payroll/types";
 import { validatePayrollPeriod, validateLiquidation, parseNoveltyForm } from "@/features/payroll/validation";
@@ -51,7 +52,8 @@ export const demoPayrollService: PayrollService = {
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     if (db.payrolls.some((p) => input.periodStart <= p.periodEnd && p.periodStart <= input.periodEnd))
       return fail("DUPLICATE", "El período ya tiene una planilla.", { periodStart: "Ya existe una planilla que cubre este período." });
-    const payroll = { id: uid("pay"), periodStart: input.periodStart, periodEnd: input.periodEnd, status: "DRAFT" as const };
+    // payDate: el formulario aún no tiene este campo; se usa el día siguiente al fin del período.
+    const payroll = { id: uid("pay"), periodStart: input.periodStart, periodEnd: input.periodEnd, payDate: addDays(input.periodEnd, 1), status: "DRAFT" as const };
     db.payrolls.push(payroll);
     // El backend real calculará ingresos, deducciones y neto. Aquí se generan líneas de EJEMPLO.
     db.lines[payroll.id] = buildDemoLines(db.employees, payroll);

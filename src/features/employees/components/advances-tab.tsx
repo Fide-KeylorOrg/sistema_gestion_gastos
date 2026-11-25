@@ -24,7 +24,7 @@ export function AdvancesTab({ employee, records, canEdit }: { employee: Employee
   const [cancelling, setCancelling] = useState<SalaryAdvance | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
-  if (!can("planilla.infoSalarial")) return <SalaryRestricted />;
+  if (!can("payroll.salaries")) return <SalaryRestricted />;
   if (records.length === 0 && !canEdit) return <EmptyState message="No hay adelantos registrados." />;
 
   const shown = records.filter((a) => (!f.status || a.status === f.status) && (!f.from || a.date >= f.from) && (!f.to || a.date <= f.to));

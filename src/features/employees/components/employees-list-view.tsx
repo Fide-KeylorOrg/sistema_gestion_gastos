@@ -17,12 +17,12 @@ export function EmployeesListView({ initialActive = "all" }: { initialActive?: E
   const rows = useQuery(["employees", f], () => services.employees.list(f));
   const positions = useQuery(["positions"], () => services.employees.positions());
   const pager = usePagination(rows.data ?? [], 8);
-  const showSalary = can("planilla.infoSalarial");
+  const showSalary = can("payroll.salaries");
   const clear = () => setF({ search: "", active: "all", position: "" });
 
   return (
     <>
-      <PageHeader title="Empleados" subtitle="Expediente digital de cada colaborador." actions={can("planilla.crear") && <Button href="/empleados/nuevo" icon="person_add">Registrar empleado</Button>} />
+      <PageHeader title="Empleados" subtitle="Expediente digital de cada colaborador." actions={can("payroll.edit") && <Button href="/empleados/nuevo" icon="person_add">Registrar empleado</Button>} />
       <div className="mb-4"><DemoNotice /></div>
       <Card padded={false}>
         <form className="grid gap-3 border-b border-slate-200 p-4 md:grid-cols-[1fr_180px_220px_auto]" role="search" onSubmit={(e) => e.preventDefault()}>

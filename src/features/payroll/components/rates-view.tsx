@@ -5,7 +5,7 @@ import { services } from "@/services";
 import { useQuery } from "@/lib/use-query";
 import { formatCRC, formatDate } from "@/lib/format";
 import type { FieldErrors } from "@/lib/result";
-import { Alert, Badge, Button, Card, DemoNotice, ErrorState, FormField, Input, Loading, Modal, PageHeader, Table, TableWrap, Td, Th, THead, Tr, useToast } from "@/components/ui";
+import { Alert, Badge, Button, Card, ErrorState, FormField, Input, Loading, Modal, PageHeader, ServerPending, Table, TableWrap, Td, Th, THead, Tr, useToast } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
 import { useSession } from "@/features/access/demo-session";
 import { DEMO_TODAY } from "@/services/demo/clock";
@@ -24,7 +24,7 @@ export function RatesView() {
     <>
       <PageHeader title="Cargas sociales y retenciones" subtitle="Parámetros globales usados al calcular las planillas." />
       <div className="mb-4 space-y-3">
-        <DemoNotice>Los porcentajes y rangos mostrados son de ejemplo y no son valores oficiales; la administración los registrará y el servidor aplicará las reglas de validación.</DemoNotice>
+        <ServerPending>Los porcentajes y rangos mostrados son de ejemplo y no son valores oficiales; la administración los registrará y el servidor aplicará las reglas de validación.</ServerPending>
         <Alert tone="info" title="Restricciones de integridad">Algunos valores están fijados por ley y se muestran bloqueados con su motivo. Los cambios aplican a las planillas de los períodos posteriores a su vigencia; las planillas cerradas conservan los valores con que se generaron.</Alert>
       </div>
       {q.loading ? <Loading /> : q.error ? <ErrorState message={q.error} /> : (
@@ -39,7 +39,7 @@ export function RatesView() {
                     <Td className="tnum">{r.valueType === "RANGES" ? <ul className="text-xs">{r.ranges!.map((t, i) => <li key={i}>{formatCRC(t.from)} – {t.to === null ? "en adelante" : formatCRC(t.to)}: <strong>{t.percent}%</strong></li>)}</ul> : r.valueType === "PERCENT" ? `${r.value}%` : formatCRC(r.value ?? 0)}</Td>
                     <Td className="tnum">{formatDate(r.effectiveFrom)}</Td>
                     <Td>{r.locked ? <span className="inline-flex items-start gap-1 text-xs text-slate-600"><Icon name="lock" className="!text-base" />{r.lockReason}</span> : <Badge tone="success">Editable</Badge>}</Td>
-                    <Td className="text-right">{can("planilla.editar") && <Button variant="ghost" className="h-8 px-2" icon={r.locked ? "block" : "edit"} disabled={r.locked} onClick={() => setEditing(r)}>{r.locked ? "Bloqueado" : "Editar"}</Button>}</Td>
+                    <Td className="text-right">{can("payroll.edit") && <Button variant="ghost" className="h-8 px-2" icon={r.locked ? "block" : "edit"} disabled={r.locked} onClick={() => setEditing(r)}>{r.locked ? "Bloqueado" : "Editar"}</Button>}</Td>
                   </Tr>))}</tbody>
               </Table></TableWrap></div>
             </Card>

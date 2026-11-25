@@ -7,7 +7,7 @@ export const UserStatusBadge = ({ active }: { active: boolean }) => <Badge tone=
 
 /** Matriz de permisos módulo × acción (HU-9, 10, 11). Solo lectura si no se pasa onChange. */
 export function PermissionMatrix({ value, onChange, error }: { value: PermissionKey[]; onChange?: (v: PermissionKey[]) => void; error?: string }) {
-  const actions = ["consultar", "crear", "editar", "infoSalarial", "administrar"] as const;
+  const actions = ["view", "edit", "salaries", "manage"] as const;
   const toggle = (k: PermissionKey) => onChange?.(value.includes(k) ? value.filter((x) => x !== k) : [...value, k]);
   return (
     <div>
@@ -19,7 +19,7 @@ export function PermissionMatrix({ value, onChange, error }: { value: Permission
               <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase text-slate-500">Módulo</th>
               {actions.map((a) => (
                 <th key={a} scope="col" className="px-3 py-2 text-center text-xs font-semibold uppercase text-slate-500">
-                  {a === "administrar" ? "Administrar" : ACTION_LABEL[a]}
+                  {a === "manage" ? "Administrar" : ACTION_LABEL[a]}
                 </th>
               ))}
             </tr>
@@ -32,7 +32,7 @@ export function PermissionMatrix({ value, onChange, error }: { value: Permission
                   const applies = MODULE_ACTIONS[m].includes(a);
                   const key = `${m}.${a}` as PermissionKey;
                   return (
-                    <td key={a} className={cn("px-3 py-2 text-center", a === "infoSalarial" && applies && "bg-red-50/40")}>
+                    <td key={a} className={cn("px-3 py-2 text-center", a === "salaries" && applies && "bg-red-50/40")}>
                       {!applies ? (
                         <span className="text-xs text-slate-400" aria-label="No aplica">—</span>
                       ) : onChange ? (

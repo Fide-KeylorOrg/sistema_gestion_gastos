@@ -6,8 +6,8 @@ export type NavGroup = { id: string; label: string; icon: string; items: NavItem
 /** Menú único del sistema (todas las pantallas lo usan, a diferencia de las pantallas sueltas de Stitch). */
 
 export const NAV_TOP: (NavItem & { icon: string })[] = [
-  { href: "/", label: "Inicio", icon: "dashboard", permission: "dashboard.consultar" },
-  { href: "/calendario", label: "Calendario", icon: "calendar_month", permission: "calendario.consultar" },
+  { href: "/", label: "Inicio", icon: "dashboard", permission: "dashboard.view" },
+  { href: "/calendario", label: "Calendario", icon: "calendar_month", permission: "calendar.view" },
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -16,11 +16,11 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Planilla",
     icon: "badge",
     items: [
-      { href: "/planilla", label: "Planillas", permission: "planilla.consultar" },
-      { href: "/empleados", label: "Empleados", permission: "planilla.consultar" },
-      { href: "/planilla/novedades", label: "Horas y permisos", permission: "planilla.consultar" },
-      { href: "/planilla/cargas-sociales", label: "Cargas sociales", permission: "planilla.consultar" },
-      { href: "/planilla/liquidacion", label: "Liquidación", permission: "planilla.consultar" },
+      { href: "/planilla", label: "Planillas", permission: "payroll.view" },
+      { href: "/empleados", label: "Empleados", permission: "payroll.view" },
+      { href: "/planilla/novedades", label: "Horas y permisos", permission: "payroll.view" },
+      { href: "/planilla/cargas-sociales", label: "Cargas sociales", permission: "payroll.view" },
+      { href: "/planilla/liquidacion", label: "Liquidación", permission: "payroll.view" },
     ],
   },
   {
@@ -28,9 +28,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Gastos",
     icon: "receipt_long",
     items: [
-      { href: "/gastos", label: "Gastos", permission: "gastos.consultar" },
-      { href: "/gastos/categorias", label: "Categorías", permission: "gastos.consultar" },
-      { href: "/gastos/notificaciones", label: "Notificaciones", permission: "gastos.consultar" },
+      { href: "/gastos", label: "Gastos", permission: "expenses.view" },
+      { href: "/gastos/categorias", label: "Categorías", permission: "expenses.view" },
+      { href: "/gastos/notificaciones", label: "Notificaciones", permission: "expenses.view" },
     ],
   },
   {
@@ -38,9 +38,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Usuarios",
     icon: "group",
     items: [
-      { href: "/usuarios", label: "Usuarios", permission: "usuarios.administrar" },
-      { href: "/usuarios/roles", label: "Roles y permisos", permission: "usuarios.administrar" },
-      { href: "/usuarios/bitacora", label: "Bitácora", permission: "usuarios.administrar" },
+      { href: "/usuarios", label: "Usuarios", permission: "users.manage" },
+      { href: "/usuarios/roles", label: "Roles y permisos", permission: "users.manage" },
+      { href: "/usuarios/bitacora", label: "Bitácora", permission: "users.manage" },
     ],
   },
 ];

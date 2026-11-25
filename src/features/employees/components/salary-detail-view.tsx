@@ -31,9 +31,9 @@ export function SalaryDetailView({ employeeId }: { employeeId: string }) {
   return (
     <>
       <PageHeader title={`Detalle salarial: ${fullName(e)}`} subtitle={`${e.idNumber} · ${e.position}`} backHref={`/empleados/${employeeId}`} backLabel="Volver al expediente"
-        actions={can("planilla.infoSalarial") && can("planilla.editar") && <Button icon="edit" onClick={() => setEditing(true)}>Editar datos salariales</Button>} />
+        actions={can("payroll.salaries") && can("payroll.edit") && <Button icon="edit" onClick={() => setEditing(true)}>Editar datos salariales</Button>} />
       <div className="mb-4"><DemoNotice /></div>
-      {!can("planilla.infoSalarial") ? <SalaryRestricted /> : (
+      {!can("payroll.salaries") ? <SalaryRestricted /> : (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
             <Card title="Datos salariales vigentes" className="lg:col-span-1">

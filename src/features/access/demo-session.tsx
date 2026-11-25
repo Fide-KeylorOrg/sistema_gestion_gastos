@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { services } from "@/services";
 import { useQuery } from "@/lib/use-query";
-import { permissionsFromServer, type PermissionKey } from "./types";
+import type { PermissionKey } from "./types";
 import type { Role } from "@/features/users/types";
 
 type Session = {
@@ -22,13 +22,13 @@ const Ctx = createContext<Session | null>(null);
  * Sesión del frontend. La autorización real la hace el servidor (requirePermission en cada página);
  * aquí solo se decide qué mostrar u ocultar. Con el backend, `permissions` vendrá de la sesión real.
  */
-export function SessionProvider({ userName, serverPermissions, children }: { userName: string; serverPermissions: string[]; children: ReactNode }) {
+export function SessionProvider({ userName, serverPermissions, children }: { userName: string; serverPermissions: PermissionKey[]; children: ReactNode }) {
   const [simulatedRoleId, setSimulatedRoleId] = useState("real");
   const { data: roles = [] } = useQuery(["roles"], () => services.roles.list());
 
   const permissions = useMemo<PermissionKey[]>(() => {
-    if (simulatedRoleId === "real") return permissionsFromServer(serverPermissions);
-    return roles.find((r) => r.id === simulatedRoleId)?.permissions ?? permissionsFromServer(serverPermissions);
+    if (simulatedRoleId === "real") return serverPermissions;
+    return roles.find((r) => r.id === simulatedRoleId)?.permissions ?? serverPermissions;
   }, [simulatedRoleId, roles, serverPermissions]);
 
   const value = useMemo<Session>(

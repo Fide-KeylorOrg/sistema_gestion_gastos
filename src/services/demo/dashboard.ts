@@ -4,13 +4,14 @@ import type { DueRow } from "@/features/expenses/types";
 import { dueStatus, DUE_SOON_DAYS } from "@/features/expenses/status";
 import { lineTotals } from "@/features/payroll/types";
 import type { ExpenseComparison, PeriodRef, UpcomingItem } from "@/features/dashboard/types";
-import { db } from "./store";
+import { activePayment, db } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const rowOf = (due: (typeof db.dues)[number]): DueRow | null => {
   const expense = db.expenses.find((e) => e.id === due.expenseId && !e.deletedAt);
   if (!expense) return null;
-  return { due, expense, categoryName: db.categories.find((c) => c.id === expense.categoryId)?.name ?? "—", status: dueStatus(due, DEMO_TODAY), daysToDue: diffDays(DEMO_TODAY, due.dueDate) };
+  const payment = activePayment(due.id);
+  return { due, payment, expense, categoryName: db.categories.find((c) => c.id === expense.categoryId)?.name ?? "—", status: dueStatus(due.dueDate, !!payment, DEMO_TODAY), daysToDue: diffDays(DEMO_TODAY, due.dueDate) };
 };
 
 const inPeriod = (date: string, mode: "MONTH" | "YEAR", p: PeriodRef) => +date.slice(0, 4) === p.year && (mode === "YEAR" || +date.slice(5, 7) - 1 === p.month);
@@ -23,10 +24,10 @@ export const demoDashboardService: DashboardService = {
     const rows = db.dues.map(rowOf).filter((r): r is DueRow => !!r);
     const horizon = addDays(DEMO_TODAY, DUE_SOON_DAYS);
     const upcoming: UpcomingItem[] = rows
-      .filter((r) => !r.due.paidAt && r.due.dueDate >= DEMO_TODAY && r.due.dueDate <= horizon)
+      .filter((r) => !r.payment && r.due.dueDate >= DEMO_TODAY && r.due.dueDate <= horizon)
       .map((row) => ({ kind: "EXPENSE" as const, row }));
     for (const p of db.payrolls.filter((x) => x.status === "DRAFT")) {
-      const date = addDays(p.periodEnd, 1);
+      const date = p.payDate;
       if (date >= DEMO_TODAY && date <= horizon) {
         const lines = db.lines[p.id] ?? [];
         upcoming.push({ kind: "PAYROLL", payrollId: p.id, date, label: `Planilla ${p.periodStart.split("-").reverse().join("/")} – ${p.periodEnd.split("-").reverse().join("/")}`, employeeCount: lines.length, total: lines.reduce((a, l) => a + lineTotals(l.items).net, 0) });
@@ -50,7 +51,7 @@ export const demoDashboardService: DashboardService = {
         const e = db.expenses.find((x) => x.id === d.expenseId && !x.deletedAt);
         if (!e || !inPeriod(d.dueDate, mode, p)) continue;
         const cat = db.categories.find((c) => c.id === e.categoryId)?.name ?? "—";
-        map.set(cat, (map.get(cat) ?? 0) + (d.paidAmount ?? d.estimatedAmount));
+        map.set(cat, (map.get(cat) ?? 0) + (activePayment(d.id)?.amount ?? d.estimatedAmount));
       }
       return map;
     };

@@ -1,14 +1,14 @@
 import type { ISODate } from "@/lib/format";
 import { diffDays } from "@/lib/format";
-import type { DueStatus, ExpenseDue } from "./types";
+import type { DueStatus } from "./types";
 
-/** Ventana de "próximos vencimientos". Misma regla en calendario y dashboard (HU-60). */
+/** Ventana de "próximos vencimientos". Misma regla en calendario y dashboard (HU-45, HU-50). */
 export const DUE_SOON_DAYS = 7;
 
-/** Estado derivado (HU-52): pagado si tiene fecha de pago; vencido si la fecha ya pasó; si no, pendiente. */
-export function dueStatus(due: Pick<ExpenseDue, "dueDate" | "paidAt">, today: ISODate): DueStatus {
-  if (due.paidAt) return "PAID";
-  return due.dueDate < today ? "OVERDUE" : "PENDING";
+/** Estado derivado (HU-43): pagado si tiene un pago vigente; vencido si la fecha ya pasó; si no, pendiente. */
+export function dueStatus(dueDate: ISODate, hasActivePayment: boolean, today: ISODate): DueStatus {
+  if (hasActivePayment) return "PAID";
+  return dueDate < today ? "OVERDUE" : "PENDING";
 }
 
 export const isDueSoon = (dueDate: ISODate, today: ISODate) => {

@@ -4,11 +4,11 @@
  */
 import { notifyDataChanged } from "../invalidation";
 import type { AuditAction, AuditEntry, Role, User, UserChange } from "@/features/users/types";
-import type { Expense, ExpenseCategory, ExpenseDue, ExpenseHistoryEntry, NotificationSettings } from "@/features/expenses/types";
+import type { Expense, ExpenseCategory, ExpenseDue, ExpenseHistoryEntry, ExpensePayment, NotificationSettings } from "@/features/expenses/types";
 import type { DisabilityRecord, Employee, EmployeeDocument, SalaryAdvance, VacationRecord, WorkHistoryEntry } from "@/features/employees/types";
 import type { GlobalRate, Novelty, Payroll, PayrollLine } from "@/features/payroll/types";
 import { demoAudit, demoRoles, demoUserChanges, demoUsers } from "./data/users";
-import { demoCategories, demoDues, demoExpenseHistory, demoExpenses } from "./data/expenses";
+import { demoCategories, demoDues, demoExpenseHistory, demoExpenses, demoPayments } from "./data/expenses";
 import { demoAdvances, demoDisabilities, demoDocuments, demoEmployees, demoVacations, demoWorkHistory } from "./data/employees";
 import { buildDemoLines, demoHolidays, demoNovelties, demoPayrolls, demoRates } from "./data/payroll";
 import { DEMO_ACTOR } from "./clock";
@@ -21,6 +21,7 @@ type State = {
   categories: ExpenseCategory[];
   expenses: Expense[];
   dues: ExpenseDue[];
+  payments: ExpensePayment[];
   expenseHistory: ExpenseHistoryEntry[];
   notification: NotificationSettings;
   employees: Employee[];
@@ -45,7 +46,7 @@ function seed(): State {
   for (const p of payrolls) lines[p.id] = buildDemoLines(employees, p);
   return {
     roles: demoRoles(), users: demoUsers(), userChanges: demoUserChanges(), audit: demoAudit(),
-    categories: demoCategories(), expenses: demoExpenses(), dues: demoDues(), expenseHistory: demoExpenseHistory(),
+    categories: demoCategories(), expenses: demoExpenses(), dues: demoDues(), payments: demoPayments(), expenseHistory: demoExpenseHistory(),
     notification: { globalRecipients: ["damaris.salas@losangeles.cr"] },
     employees, workHistory: demoWorkHistory(), vacations: demoVacations(), disabilities: demoDisabilities(), documents: demoDocuments(), advances: demoAdvances(),
     payrolls, lines, novelties: demoNovelties(), rates: demoRates(), holidays: demoHolidays(),
@@ -80,6 +81,9 @@ export function markRecalc(payrollId: string, employeeId: string) {
 }
 
 export const done = notifyDataChanged;
+
+/** Pago vigente (no anulado) de un vencimiento. */
+export const activePayment = (dueId: string) => db.payments.find((p) => p.dueId === dueId && !p.voidedAt);
 
 export const payrollLabel = (p: Pick<Payroll, "periodStart" | "periodEnd">) => {
   const f = (s: string) => s.split("-").reverse().join("/");

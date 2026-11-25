@@ -8,17 +8,17 @@ export const demoRoles = (): Role[] => [
   {
     id: "role-conta",
     name: "Asistente Contable",
-    permissions: P("planilla.consultar", "planilla.crear", "planilla.editar", "gastos.consultar", "gastos.crear", "gastos.editar", "dashboard.consultar", "calendario.consultar"),
+    permissions: P("payroll.view", "payroll.edit", "expenses.view", "expenses.edit", "dashboard.view", "calendar.view"),
     createdAt: "2026-10-02T10:30:00-06:00",
   },
-  { id: "role-super", name: "Supervisor de Operaciones", permissions: P("gastos.consultar", "dashboard.consultar", "calendario.consultar"), createdAt: "2026-10-02T10:40:00-06:00" },
+  { id: "role-super", name: "Supervisor de Operaciones", permissions: P("expenses.view", "dashboard.view", "calendar.view"), createdAt: "2026-10-02T10:40:00-06:00" },
   {
     id: "role-audit",
     name: "Auditor de Control",
-    permissions: P("planilla.consultar", "planilla.infoSalarial", "gastos.consultar", "dashboard.consultar", "dashboard.infoSalarial", "calendario.consultar", "calendario.infoSalarial"),
+    permissions: P("payroll.view", "payroll.salaries", "expenses.view", "dashboard.view", "calendar.view"),
     createdAt: "2026-10-05T14:00:00-06:00",
   },
-  { id: "role-vacio", name: "Consulta de calendario", permissions: P("calendario.consultar"), createdAt: "2026-10-12T08:15:00-06:00" },
+  { id: "role-vacio", name: "Consulta de calendario", permissions: P("calendar.view"), createdAt: "2026-10-12T08:15:00-06:00" },
 ];
 
 export const demoUsers = (): User[] => [

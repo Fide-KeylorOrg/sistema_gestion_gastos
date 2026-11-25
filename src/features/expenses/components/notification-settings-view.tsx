@@ -18,7 +18,7 @@ export function NotificationSettingsView() {
   if (q.loading) return <Loading />;
   if (q.error || !q.data) return <ErrorState message={q.error ?? "Sin datos"} />;
   const list = q.data.globalRecipients;
-  const editable = can("gastos.editar");
+  const editable = can("expenses.edit");
 
   async function save(next: string[], message: string) {
     const res = await services.expenses.updateNotificationSettings({ globalRecipients: next });

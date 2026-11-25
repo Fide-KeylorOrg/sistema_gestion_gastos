@@ -40,6 +40,8 @@ export type Payroll = {
   id: string;
   periodStart: ISODate;
   periodEnd: ISODate;
+  /** Fecha de pago programada (HU-50). */
+  payDate: ISODate;
   status: PayrollStatus;
   closedAt?: string;
   paidAt?: ISODate;

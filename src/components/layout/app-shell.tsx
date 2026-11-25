@@ -8,10 +8,10 @@ import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
 import { ToastProvider } from "@/components/ui/toast";
 import { SessionProvider, useSession } from "@/features/access/demo-session";
-import { requiredPermissionForRoute } from "@/features/access/types";
+import { requiredPermissionForRoute, type PermissionKey } from "@/features/access/types";
 import { activeHref, NAV_GROUPS, NAV_TOP } from "./nav-config";
 
-export function AppShell({ user, serverPermissions, children }: { user: { fullName: string; username: string }; serverPermissions: string[]; children: ReactNode }) {
+export function AppShell({ user, serverPermissions, children }: { user: { fullName: string; username: string }; serverPermissions: PermissionKey[]; children: ReactNode }) {
   return (
     <SessionProvider userName={user.fullName} serverPermissions={serverPermissions}>
       <ToastProvider>

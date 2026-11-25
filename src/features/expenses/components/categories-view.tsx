@@ -19,7 +19,7 @@ export function CategoriesView() {
   const [form, setForm] = useState<{ category?: CategoryWithCount } | null>(null);
   const [toDeactivate, setToDeactivate] = useState<CategoryWithCount | null>(null);
   const toast = useToast();
-  const canCreate = can("gastos.crear");
+  const canCreate = can("expenses.edit");
   const selected = cats.data?.find((c) => c.id === selectedId);
 
   return (
@@ -68,7 +68,7 @@ function CategoryExpenses({ categoryId }: { categoryId: string }) {
   const h = useQuery(["cat-dues", categoryId, "h"], () => services.expenses.listDues({ tab: "history", categoryId }));
   if (a.loading || h.loading) return <Loading />;
   const rows = [...(a.data ?? []), ...(h.data ?? [])];
-  const total = rows.reduce((s, r) => s + (r.due.paidAmount ?? r.due.estimatedAmount), 0);
+  const total = rows.reduce((s, r) => s + (r.payment?.amount ?? r.due.estimatedAmount), 0);
   if (!rows.length) return <EmptyState message="Esta categoría aún no tiene gastos." />;
   return (
     <div className="space-y-3">
@@ -76,7 +76,7 @@ function CategoryExpenses({ categoryId }: { categoryId: string }) {
       <ul className="divide-y divide-slate-100">
         {rows.map((r) => (
           <li key={r.due.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-            <div><Link href={`/gastos/${r.due.id}`} className="font-medium text-blue-700 hover:underline">{r.expense.concept}</Link><p className="text-xs text-slate-500">Vence {formatDate(r.due.dueDate)} · {formatCRC(r.due.paidAmount ?? r.due.estimatedAmount)}</p></div>
+            <div><Link href={`/gastos/${r.due.id}`} className="font-medium text-blue-700 hover:underline">{r.expense.concept}</Link><p className="text-xs text-slate-500">Vence {formatDate(r.due.dueDate)} · {formatCRC(r.payment?.amount ?? r.due.estimatedAmount)}</p></div>
             <DueStatusBadge row={r} />
           </li>
         ))}

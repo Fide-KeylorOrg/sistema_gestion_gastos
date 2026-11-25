@@ -24,7 +24,7 @@ export function RolesView() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {roles.data.map((r) => (
             <Card key={r.id} title={r.name} subtitle={`${r.userCount} ${r.userCount === 1 ? "usuario asignado" : "usuarios asignados"}`}
-              actions={r.permissions.includes("planilla.infoSalarial") ? <Badge tone="danger">Ve información salarial</Badge> : undefined}>
+              actions={r.permissions.includes("payroll.salaries") ? <Badge tone="danger">Ve información salarial</Badge> : undefined}>
               <p className="mb-4 text-sm text-slate-600">{r.permissions.length} {r.permissions.length === 1 ? "permiso" : "permisos"} asignados.</p>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={() => setMode({ kind: "view", roleId: r.id })}>Ver detalle</Button>
