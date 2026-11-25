@@ -23,6 +23,41 @@ test("payroll periods cannot overlap or end before they start, and only closed p
   }
 });
 
+test("an employee's active vacations and sick leaves never overlap, and only sick leave has a sick-leave type", async () => {
+  const employee = await db.employee.create({
+    data: {
+      idType: "NATIONAL_ID", idNumber: randomUUID(), firstName: "Ana", lastName1: "Mora", birthDate: day("1990-05-01"), position: "Cajera",
+      hireDate: day("2025-01-06"), salaryBasis: "MONTHLY", baseSalary: 450000, salaryEffectiveFrom: day("2025-01-06"),
+    },
+  });
+  const leave = (kind: "VACATION" | "SICK_LEAVE", start: string, end: string, extra = {}) =>
+    db.leave.create({ data: { employeeId: employee.id, kind, startDate: day(start), endDate: day(end), days: 3, ...extra } });
+  try {
+    const vacation = await leave("VACATION", "2031-03-02", "2031-03-04");
+    await assert.rejects(leave("SICK_LEAVE", "2031-03-04", "2031-03-06", { sickLeaveType: "CCSS" }));
+    await assert.rejects(leave("SICK_LEAVE", "2031-03-10", "2031-03-12"));
+    await assert.rejects(leave("VACATION", "2031-03-10", "2031-03-12", { sickLeaveType: "CCSS" }));
+    await db.leave.update({ where: { id: vacation.id }, data: { voidedAt: new Date() } });
+    await leave("SICK_LEAVE", "2031-03-04", "2031-03-06", { sickLeaveType: "CCSS" });
+  } finally {
+    await db.leave.deleteMany({ where: { employeeId: employee.id } });
+    await db.employee.delete({ where: { id: employee.id } });
+  }
+});
+
+test("a rate component can't have two overlapping validity periods", async () => {
+  const code = `TEST_${randomUUID()}`;
+  const rate = (from: string, to: string) =>
+    db.payrollRate.create({ data: { scope: "EMPLOYER", code, percent: 1, effectiveFrom: day(from), effectiveTo: day(to), source: "test" } });
+  try {
+    await rate("2031-01-01", "2031-12-31");
+    await assert.rejects(rate("2031-06-01", "2032-12-31"));
+    await rate("2032-01-01", "2032-12-31");
+  } finally {
+    await db.payrollRate.deleteMany({ where: { code } });
+  }
+});
+
 test("a due has at most one active payment; a voided one is kept with its reason and the due can be paid again", async () => {
   const category = await db.expenseCategory.create({ data: { name: `test-${randomUUID()}` } });
   const expense = await db.expense.create({ data: { concept: "Agua", categoryId: category.id, estimatedAmount: 15000 } });

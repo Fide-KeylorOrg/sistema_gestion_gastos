@@ -1,6 +1,7 @@
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/password";
 import { PERMISSIONS, type Permission } from "../src/lib/permissions";
+import { CCSS_RATES, INCOME_TAX } from "../src/lib/payroll-rates";
 
 // Roles are fixed (no role editor in the user stories); the admin only assigns one per user.
 const ROLES: Record<string, Permission[]> = {
@@ -38,7 +39,35 @@ async function main() {
     },
   });
 
-  console.log(`Seed listo: roles ${Object.keys(ROLES).join(", ")} y usuario "admin".`);
+  await seedRates();
+  console.log(`Seed listo: roles ${Object.keys(ROLES).join(", ")}, usuario "admin" y tarifas de planilla.`);
+}
+
+// Loads the versioned tables from src/lib/payroll-rates.ts until the calculations read them from the database.
+async function seedRates() {
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+  for (const entry of CCSS_RATES) {
+    const rows = [
+      ...Object.entries(entry.employee).map(([code, percent]) => ({ scope: "EMPLOYEE" as const, code, percent })),
+      ...Object.entries(entry.employer).map(([code, percent]) => ({ scope: "EMPLOYER" as const, code, percent })),
+    ];
+    for (const { scope, code, percent } of rows) {
+      const data = { percent, effectiveTo: day(entry.to), source: entry.source };
+      await db.payrollRate.upsert({
+        where: { scope_code_effectiveFrom: { scope, code, effectiveFrom: day(entry.from) } },
+        update: data,
+        create: { scope, code, effectiveFrom: day(entry.from), ...data },
+      });
+    }
+  }
+  for (const table of INCOME_TAX) {
+    const brackets = table.brackets.map((b) => ({ lowerBound: b.from, upperBound: b.to, percent: b.percent }));
+    await db.incomeTaxTable.upsert({
+      where: { effectiveFrom: day(table.from) },
+      update: { effectiveTo: day(table.to), source: table.source, brackets: { deleteMany: {}, create: brackets } },
+      create: { effectiveFrom: day(table.from), effectiveTo: day(table.to), source: table.source, brackets: { create: brackets } },
+    });
+  }
 }
 
 main()

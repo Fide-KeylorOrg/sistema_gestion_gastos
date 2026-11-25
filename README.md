@@ -69,7 +69,7 @@ Coverage today: CCSS rates from 2023-01-01 to 2028-12-31 (the IVM is fixed until
 - Minimum contributory base (Decreto 44756-MTSS): salaries below ₡346.789 (SEM) or ₡324.590 (IVM) are charged on that base. Not applied.
 - The CCSS asks for the monthly salary to be reported even when paid biweekly (₡200.000 biweekly is reported as ₡400.000), so biweekly lines must be annualized to monthly before this module is used.
 - The demo payroll lines apply social charges only. Income tax is not withheld there: payrolls are biweekly and the brackets are monthly, so the base has to be projected first.
-- The rates live in code. If the administration must edit them without a deploy, move the same versioned tables to the database (the demo parameters screen already has `effectiveFrom`) and keep the date lookup.
+- The database already has the same versioned tables (`PayrollRate`, `IncomeTaxTable`, `IncomeTaxBracket`, HU-19), loaded by `make seed` from the arrays in `src/lib/payroll-rates.ts`. The calculations still read the arrays; once the parameters screen saves to the database, switch the lookups to those tables and drop the arrays.
 
 ## Labor benefits calculations
 

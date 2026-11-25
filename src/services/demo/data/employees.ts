@@ -3,7 +3,7 @@ import type { DisabilityRecord, Employee, EmployeeDocument, SalaryAdvance, Vacat
 const E = (id: string, first: string, l1: string, l2: string, idNumber: string, position: string, hire: string, salary: number, extra: Partial<Employee> = {}): Employee => ({
   id, idType: "NATIONAL_ID", idNumber, firstName: first, lastName1: l1, lastName2: l2, birthDate: "1990-05-14", email: `${first.split(" ")[0].toLowerCase()}.${l1.toLowerCase()}@correo.cr`,
   phone: "8800-" + id.slice(-1).repeat(4), address: "Heredia, San Francisco", position, hireDate: hire, active: true, salaryBasis: "MONTHLY", baseSalary: salary,
-  vacationBalanceDays: 8, workday: "Diurna (48 h semanales)", salaryEffectiveFrom: hire, ...extra,
+  vacationBalanceDays: 8, salaryEffectiveFrom: hire, ...extra,
 });
 
 export const demoEmployees = (): Employee[] => [
@@ -11,7 +11,7 @@ export const demoEmployees = (): Employee[] => [
   E("emp-2", "María Fernanda", "Solís", "Vargas", "2-0654-0321", "Cajera", "2022-06-15", 520000, { vacationBalanceDays: 6 }),
   E("emp-3", "José Pablo", "Rojas", "Araya", "1-1450-0782", "Encargado de ferretería", "2020-01-10", 700000, { vacationBalanceDays: 15, contractEndsOn: "2027-01-31" }),
   E("emp-4", "Andrea", "Cascante", "Núñez", "4-0215-0933", "Cajera", "2023-09-04", 520000, { vacationBalanceDays: 4 }),
-  E("emp-5", "Luis Fernando", "Calderón", "Sáenz", "1-0987-0451", "Reposición y displays", "2024-02-19", 2800, { salaryBasis: "HOURLY", vacationBalanceDays: 5, workday: "Mixta (44 h semanales)" }),
+  E("emp-5", "Luis Fernando", "Calderón", "Sáenz", "1-0987-0451", "Reposición y displays", "2024-02-19", 2800, { salaryBasis: "HOURLY", vacationBalanceDays: 5 }),
   E("emp-6", "Jimena", "Ulate", "Quesada", "3-0412-0678", "Ayudante de carnicería", "2025-04-07", 560000, { vacationBalanceDays: 3, address: undefined }),
   E("emp-7", "Esteban", "Brenes", "Mora", "1-1620-0144", "Cajero", "2025-11-03", 520000, { vacationBalanceDays: 2 }),
   E("emp-8", "Patricia", "Mora", "Calvo", "1-1420-0382", "Asistente administrativa", "2019-08-12", 800000, { active: false, statusChangedAt: "2026-10-10", statusReason: "Renuncia", vacationBalanceDays: 0 }),

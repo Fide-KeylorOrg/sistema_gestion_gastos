@@ -26,12 +26,11 @@ export type Employee = {
   statusReason?: string;
   salaryBasis: SalaryBasis;
   baseSalary: number;
-  /** SOLO INTERFAZ: el esquema actual no guarda vencimiento de contrato (HU-58). El backend deberá aportarlo. */
+  /** Vencimiento del contrato (HU-48). */
   contractEndsOn?: ISODate;
-  /** SOLO INTERFAZ: saldo de vacaciones y jornada los calcula/guarda el backend (HU-20, 31). */
+  /** SOLO INTERFAZ: el saldo de vacaciones lo calcula el backend (HU-17, 27). */
   vacationBalanceDays: number;
-  workday: string;
-  /** SOLO INTERFAZ: vigencia de los datos salariales vigentes (HU-21). */
+  /** Vigencia de los datos salariales vigentes (HU-18). */
   salaryEffectiveFrom: ISODate;
 };
 
@@ -40,8 +39,7 @@ export const fullName = (e: Pick<Employee, "firstName" | "lastName1" | "lastName
 
 export type EmployeeFilters = { search?: string; active?: "all" | "active" | "inactive"; position?: string };
 
-export type EmployeeInput = Omit<Employee, "id" | "active" | "statusChangedAt" | "statusReason" | "vacationBalanceDays" | "workday" | "salaryEffectiveFrom"> &
-  Partial<Pick<Employee, "workday">>;
+export type EmployeeInput = Omit<Employee, "id" | "active" | "statusChangedAt" | "statusReason" | "vacationBalanceDays" | "salaryEffectiveFrom">;
 
 export type WorkHistoryType = "INGRESO" | "CAMBIO_SALARIAL" | "VACACIONES" | "INCAPACIDAD" | "SALIDA" | "REINGRESO" | "EDICION";
 export const WORK_HISTORY_LABEL: Record<WorkHistoryType, string> = {
@@ -127,4 +125,4 @@ export type EmployeeRecord = {
 };
 
 export type StatusChangeInput = { date: ISODate; reason?: string };
-export type SalaryDataInput = { salaryBasis: SalaryBasis; baseSalary: number; workday: string; effectiveFrom: ISODate };
+export type SalaryDataInput = { salaryBasis: SalaryBasis; baseSalary: number; effectiveFrom: ISODate };

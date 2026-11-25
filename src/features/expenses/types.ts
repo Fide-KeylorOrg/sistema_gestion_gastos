@@ -8,14 +8,13 @@ export type CategoryWithCount = ExpenseCategory & { expenseCount: number };
 export type ExpenseKind = "PAYMENT" | "PERMIT";
 export const EXPENSE_KIND_LABEL: Record<ExpenseKind, string> = { PAYMENT: "Pago / obligación", PERMIT: "Permiso (sanitario o comercial)" };
 
-export type Recurrence = "NONE" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "YEARLY";
+export type Recurrence = "NONE" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
 export const RECURRENCE_LABEL: Record<Recurrence, string> = {
   NONE: "Gasto único",
   WEEKLY: "Semanal",
   BIWEEKLY: "Quincenal",
   MONTHLY: "Mensual",
   QUARTERLY: "Trimestral",
-  SEMIANNUAL: "Semestral",
   YEARLY: "Anual",
 };
 

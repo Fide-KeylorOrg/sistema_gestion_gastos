@@ -9,20 +9,21 @@ datasource db {
 
 // Usernames and emails are stored lowercased by the app, so @unique is case-insensitive in practice.
 model User {
-  id                 String     @id @default(uuid(7)) @db.Uuid
+  id                 String       @id @default(uuid(7)) @db.Uuid
   fullName           String
-  username           String     @unique
-  email              String     @unique
+  username           String       @unique
+  email              String       @unique
   passwordHash       String
-  active             Boolean    @default(true)
-  mustChangePassword Boolean    @default(true)
-  roleId             String     @db.Uuid
-  role               Role       @relation(fields: [roleId], references: [id])
-  lastLoginAt        DateTime?  @db.Timestamptz(3)
-  createdAt          DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime   @updatedAt @db.Timestamptz(3)
+  active             Boolean      @default(true)
+  mustChangePassword Boolean      @default(true)
+  roleId             String       @db.Uuid
+  role               Role         @relation(fields: [roleId], references: [id])
+  lastLoginAt        DateTime?    @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
   sessions           Session[]
   auditLogs          AuditLog[]
+  uploadedFiles      StoredFile[]
 }
 
 // permissions holds keys from PERMISSIONS in src/lib/permissions.ts; the app validates them on write.
@@ -60,9 +61,25 @@ model AuditLog {
   @@index([actorId])
 }
 
-// ---------- Payroll ----------
+// Uploaded files (stored in S3). Each file belongs to exactly one record, which points to it.
+model StoredFile {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  storageKey       String            @unique // S3 object key
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  uploadedById     String            @db.Uuid
+  uploadedBy       User              @relation(fields: [uploadedById], references: [id])
+  uploadedAt       DateTime          @default(now()) @db.Timestamptz(3)
+  employeeDocument EmployeeDocument?
+  leave            Leave?
+  expense          Expense?
+  expensePayment   ExpensePayment?
+}
+
+// ---------- Employees and payroll ----------
 // Money is Decimal(14,2) in colones. Business dates are @db.Date (no time zone shifts).
-// CHECK and EXCLUDE constraints Prisma can't express live in the add_payroll_and_expenses migration.
+// CHECK and EXCLUDE constraints Prisma can't express live at the end of the init migration.
 
 enum IdType {
   NATIONAL_ID // cédula física
@@ -71,47 +88,204 @@ enum IdType {
 }
 
 enum SalaryBasis {
-  MONTHLY
+  MONTHLY // monthly salary, paid biweekly
   HOURLY
 }
 
 // Current terms only. Past values live in the AuditLog and in each PayrollLine snapshot.
+// Everyone works the jornada diurna (8 h a day, 48 h a week, Código de Trabajo art. 136): hours beyond it are overtime.
 model Employee {
-  id              String        @id @default(uuid(7)) @db.Uuid
-  idType          IdType
-  idNumber        String
-  firstName       String
-  lastName1       String
-  lastName2       String?
-  birthDate       DateTime      @db.Date
-  email           String?
-  phone           String?
-  address         String?
-  position        String
-  hireDate        DateTime      @db.Date
-  active          Boolean       @default(true)
-  statusChangedAt DateTime?     @db.Date
-  statusReason    String?
-  salaryBasis     SalaryBasis
-  baseSalary      Decimal       @db.Decimal(14, 2)
-  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
-  payrollLines    PayrollLine[]
+  id                  String             @id @default(uuid(7)) @db.Uuid
+  idType              IdType
+  idNumber            String
+  firstName           String
+  lastName1           String
+  lastName2           String?
+  birthDate           DateTime           @db.Date
+  email               String?
+  phone               String?
+  address             String?
+  position            String
+  hireDate            DateTime           @db.Date
+  contractEndsOn      DateTime?          @db.Date // fixed-term contracts; shown in the calendar (HU-48)
+  active              Boolean            @default(true)
+  statusChangedAt     DateTime?          @db.Date
+  statusReason        String?
+  salaryBasis         SalaryBasis
+  baseSalary          Decimal            @db.Decimal(14, 2)
+  salaryEffectiveFrom DateTime           @db.Date // first payroll date the current salary applies to (HU-18)
+  // Vacation days carried over when an existing employee is loaded; the balance is this + accrued - taken.
+  openingVacationDays Decimal            @default(0) @db.Decimal(5, 1)
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  payrollLines        PayrollLine[]
+  timeEntries         TimeEntry[]
+  leaves              Leave[]
+  advances            SalaryAdvance[]
+  documents           EmployeeDocument[]
 
   @@unique([idType, idNumber])
 }
 
+enum DocumentType {
+  NATIONAL_ID
+  CONTRACT
+  CRIMINAL_RECORD
+  RECOMMENDATION_LETTER
+  OTHER
+}
+
+// A new version points to the one it replaces; deleting only hides it, so the history stays (HU-29).
+model EmployeeDocument {
+  id         String            @id @default(uuid(7)) @db.Uuid
+  employeeId String            @db.Uuid
+  employee   Employee          @relation(fields: [employeeId], references: [id])
+  type       DocumentType
+  fileId     String            @unique @db.Uuid
+  file       StoredFile        @relation(fields: [fileId], references: [id])
+  replacesId String?           @unique @db.Uuid
+  replaces   EmployeeDocument? @relation("DocumentVersions", fields: [replacesId], references: [id])
+  replacedBy EmployeeDocument? @relation("DocumentVersions")
+  deletedAt  DateTime?         @db.Timestamptz(3)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([employeeId])
+}
+
+enum LeaveKind {
+  VACATION
+  SICK_LEAVE
+}
+
+// Who pays the sick leave (incapacidad). The administration still has to confirm the list.
+enum SickLeaveType {
+  CCSS
+  INS
+  OTHER
+}
+
+// Vacations (HU-27) and sick leave (HU-28) in one table, so the database can reject any overlap between them.
+model Leave {
+  id            String         @id @default(uuid(7)) @db.Uuid
+  employeeId    String         @db.Uuid
+  employee      Employee       @relation(fields: [employeeId], references: [id])
+  kind          LeaveKind
+  sickLeaveType SickLeaveType? // only for SICK_LEAVE
+  startDate     DateTime       @db.Date
+  endDate       DateTime       @db.Date
+  days          Decimal        @db.Decimal(4, 1) // days counted under the rules in force; vacations subtract them from the balance
+  proofFileId   String?        @unique @db.Uuid
+  proofFile     StoredFile?    @relation(fields: [proofFileId], references: [id])
+  voidedAt      DateTime?      @db.Timestamptz(3)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([employeeId])
+}
+
+enum TimeEntryKind {
+  OVERTIME
+  UNPAID_LEAVE // permiso sin goce de salario
+}
+
+// Novedades of a draft payroll (HU-16). Locked once the payroll closes.
+model TimeEntry {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  employeeId String        @db.Uuid
+  employee   Employee      @relation(fields: [employeeId], references: [id])
+  payrollId  String        @db.Uuid
+  payroll    Payroll       @relation(fields: [payrollId], references: [id])
+  date       DateTime      @db.Date
+  kind       TimeEntryKind
+  hours      Decimal       @db.Decimal(5, 2)
+  note       String?
+  voidedAt   DateTime?     @db.Timestamptz(3)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([employeeId])
+  @@index([payrollId])
+}
+
+// Status is derived: voided, deducted (its payroll is closed) or pending (HU-31).
+model SalaryAdvance {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  employeeId String    @db.Uuid
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  payrollId  String    @db.Uuid // payroll it is deducted in
+  payroll    Payroll   @relation(fields: [payrollId], references: [id])
+  amount     Decimal   @db.Decimal(14, 2)
+  date       DateTime  @db.Date
+  note       String?
+  voidedAt   DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([employeeId])
+  @@index([payrollId])
+}
+
+// Calendar holidays (HU-45, HU-46).
+model Holiday {
+  id   String   @id @default(uuid(7)) @db.Uuid
+  date DateTime @unique @db.Date
+  name String
+}
+
+enum RateScope {
+  EMPLOYEE // withheld from the salary
+  EMPLOYER // paid by the employer on top of it
+}
+
+// CCSS and related social charges, one row per component and validity period (HU-19). A change adds a row
+// starting on its effective date; old rows are never edited, so past payrolls keep their rates.
+model PayrollRate {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  scope         RateScope
+  code          String // SEM, IVM, BANCO_POPULAR, ASIGNACIONES_FAMILIARES, IMAS, INA, FCL, OPC, INS
+  percent       Decimal   @db.Decimal(6, 3)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime  @db.Date
+  source        String
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([scope, code, effectiveFrom])
+}
+
+// Monthly income tax brackets for salaried workers; Hacienda publishes a new table each December (HU-19).
+model IncomeTaxTable {
+  id            String             @id @default(uuid(7)) @db.Uuid
+  effectiveFrom DateTime           @unique @db.Date
+  effectiveTo   DateTime           @db.Date
+  source        String
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  brackets      IncomeTaxBracket[]
+}
+
+model IncomeTaxBracket {
+  id         String         @id @default(uuid(7)) @db.Uuid
+  tableId    String         @db.Uuid
+  table      IncomeTaxTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  lowerBound Decimal        @db.Decimal(14, 2)
+  upperBound Decimal?       @db.Decimal(14, 2) // null = no upper limit
+  percent    Decimal        @db.Decimal(5, 2)
+
+  @@unique([tableId, lowerBound])
+}
+
 // Paid biweekly. Draft until closedAt is set; closed payrolls are never recalculated.
 model Payroll {
-  id          String        @id @default(uuid(7)) @db.Uuid
-  periodStart DateTime      @db.Date
-  periodEnd   DateTime      @db.Date
-  payDate     DateTime      @db.Date // scheduled payment date (dashboard "próximos pagos de planilla")
-  closedAt    DateTime?     @db.Timestamptz(3)
-  paidAt      DateTime?     @db.Date
-  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  id          String          @id @default(uuid(7)) @db.Uuid
+  periodStart DateTime        @db.Date
+  periodEnd   DateTime        @db.Date
+  payDate     DateTime        @db.Date // scheduled payment date (dashboard "próximos pagos de planilla")
+  closedAt    DateTime?       @db.Timestamptz(3)
+  paidAt      DateTime?       @db.Date
+  createdAt   DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime        @updatedAt @db.Timestamptz(3)
   lines       PayrollLine[]
+  timeEntries TimeEntry[]
+  advances    SalaryAdvance[]
 }
 
 // Snapshot of the salary terms used, so later changes to Employee never alter this payroll.
@@ -155,12 +329,13 @@ model PayrollItem {
 
 // Names are unique ignoring case; the app checks with mode: "insensitive" before writing.
 model ExpenseCategory {
-  id        String    @id @default(uuid(7)) @db.Uuid
-  name      String    @unique
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
-  expenses  Expense[]
+  id          String    @id @default(uuid(7)) @db.Uuid
+  name        String    @unique
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  expenses    Expense[]
 }
 
 enum ExpenseKind {
@@ -174,7 +349,6 @@ enum Recurrence {
   BIWEEKLY
   MONTHLY
   QUARTERLY
-  SEMIANNUAL
   YEARLY
 }
 
@@ -192,6 +366,8 @@ model Expense {
   recurrenceEndsOn DateTime?       @db.Date
   notifyDaysBefore Int?            @default(7) // 1-10; null = notifications off
   extraRecipients  String[]
+  attachmentFileId String?         @unique @db.Uuid // supporting document (HU-32)
+  attachmentFile   StoredFile?     @relation(fields: [attachmentFileId], references: [id])
   deletedAt        DateTime?       @db.Timestamptz(3)
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
@@ -219,17 +395,19 @@ model ExpenseDue {
   @@index([dueDate])
 }
 
-// Voided payments are kept with their reason (HU-39). At most one non-voided payment per due (partial unique index).
+// Voided payments are kept with their reason (HU-39). At most one non-voided payment per due (EXCLUDE constraint).
 model ExpensePayment {
-  id           String      @id @default(uuid(7)) @db.Uuid
-  dueId        String      @db.Uuid
-  due          ExpenseDue  @relation("DuePayments", fields: [dueId], references: [id])
-  paidAt       DateTime    @db.Date
-  amount       Decimal     @db.Decimal(14, 2)
-  voidedAt     DateTime?   @db.Timestamptz(3)
-  voidReason   String?
-  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
-  generatedDue ExpenseDue? @relation("GeneratedDue")
+  id            String      @id @default(uuid(7)) @db.Uuid
+  dueId         String      @db.Uuid
+  due           ExpenseDue  @relation("DuePayments", fields: [dueId], references: [id])
+  paidAt        DateTime    @db.Date
+  amount        Decimal     @db.Decimal(14, 2)
+  receiptFileId String?     @unique @db.Uuid // payment receipt (HU-38)
+  receiptFile   StoredFile? @relation(fields: [receiptFileId], references: [id])
+  voidedAt      DateTime?   @db.Timestamptz(3)
+  voidReason    String?
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+  generatedDue  ExpenseDue? @relation("GeneratedDue")
 
   @@index([dueId])
 }

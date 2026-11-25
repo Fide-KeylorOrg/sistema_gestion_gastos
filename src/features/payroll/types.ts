@@ -82,7 +82,6 @@ export type EmployeeSalaryView = {
   employeeId: string;
   salaryBasis: string;
   baseSalary: number;
-  workday: string;
   vacationBalanceDays: number;
   overtimeHours: number;
   deductions: { description: string; amount: number }[];

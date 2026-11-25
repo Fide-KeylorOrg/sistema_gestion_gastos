@@ -38,7 +38,7 @@ export function SalaryDetailView({ employeeId }: { employeeId: string }) {
           <div className="grid gap-6 lg:grid-cols-3">
             <Card title="Datos salariales vigentes" className="lg:col-span-1">
               <dl className="space-y-3 text-sm">
-                <R l="Tipo de salario" v={SALARY_BASIS_LABEL[e.salaryBasis]} /><R l="Salario base" v={formatCRC(e.baseSalary)} /><R l="Jornada" v={e.workday} />
+                <R l="Tipo de salario" v={SALARY_BASIS_LABEL[e.salaryBasis]} /><R l="Salario base" v={formatCRC(e.baseSalary)} />
                 <R l="Vigente desde" v={formatDate(e.salaryEffectiveFrom)} /><R l="Saldo de vacaciones" v={`${e.vacationBalanceDays} días`} />
               </dl>
             </Card>
@@ -62,14 +62,14 @@ export function SalaryDetailView({ employeeId }: { employeeId: string }) {
           </div>
         </div>
       )}
-      <SalaryModal open={editing} onClose={() => setEditing(false)} employeeId={employeeId} initial={{ salaryBasis: e.salaryBasis, baseSalary: String(e.baseSalary), workday: e.workday, effectiveFrom: DEMO_TODAY }} />
+      <SalaryModal open={editing} onClose={() => setEditing(false)} employeeId={employeeId} initial={{ salaryBasis: e.salaryBasis, baseSalary: String(e.baseSalary), effectiveFrom: DEMO_TODAY }} />
     </>
   );
 }
 
 const R = ({ l, v }: { l: string; v: string }) => <div className="flex justify-between gap-3"><dt className="text-slate-500">{l}</dt><dd className="font-medium text-slate-900">{v}</dd></div>;
 
-function SalaryModal({ open, onClose, employeeId, initial }: { open: boolean; onClose: () => void; employeeId: string; initial: { salaryBasis: SalaryBasis; baseSalary: string; workday: string; effectiveFrom: string } }) {
+function SalaryModal({ open, onClose, employeeId, initial }: { open: boolean; onClose: () => void; employeeId: string; initial: { salaryBasis: SalaryBasis; baseSalary: string; effectiveFrom: string } }) {
   const toast = useToast();
   const [v, setV] = useState(initial);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -80,7 +80,7 @@ function SalaryModal({ open, onClose, employeeId, initial }: { open: boolean; on
     const p = parseSalaryForm(v);
     setErrors(p.errors);
     if (p.baseSalary === undefined) return;
-    const res = await services.payroll.updateSalaryData(employeeId, { salaryBasis: v.salaryBasis, baseSalary: p.baseSalary, workday: v.workday, effectiveFrom: v.effectiveFrom });
+    const res = await services.payroll.updateSalaryData(employeeId, { salaryBasis: v.salaryBasis, baseSalary: p.baseSalary, effectiveFrom: v.effectiveFrom });
     if (!res.ok) return setErrors(res.error.fieldErrors ?? {});
     toast.success("Datos salariales actualizados.");
     onClose();
@@ -92,7 +92,6 @@ function SalaryModal({ open, onClose, employeeId, initial }: { open: boolean; on
         <Alert tone="info">Los nuevos datos se usarán al generar las planillas de los períodos posteriores a su fecha de vigencia.</Alert>
         <FormField id="sl-basis" label="Tipo de salario" required error={errors.salaryBasis}><Select id="sl-basis" value={v.salaryBasis} onChange={(e) => setV({ ...v, salaryBasis: e.target.value as SalaryBasis })} invalid={!!errors.salaryBasis}>{(Object.keys(SALARY_BASIS_LABEL) as SalaryBasis[]).map((k) => <option key={k} value={k}>{SALARY_BASIS_LABEL[k]}</option>)}</Select></FormField>
         <FormField id="sl-base" label="Salario base (₡)" required error={errors.baseSalary}><Input id="sl-base" inputMode="decimal" value={v.baseSalary} onChange={(e) => setV({ ...v, baseSalary: e.target.value })} invalid={!!errors.baseSalary} /></FormField>
-        <FormField id="sl-work" label="Jornada laboral" required error={errors.workday}><Input id="sl-work" value={v.workday} onChange={(e) => setV({ ...v, workday: e.target.value })} invalid={!!errors.workday} /></FormField>
         <FormField id="sl-eff" label="Fecha de vigencia" required error={errors.effectiveFrom}><Input id="sl-eff" type="date" value={v.effectiveFrom} onChange={(e) => setV({ ...v, effectiveFrom: e.target.value })} invalid={!!errors.effectiveFrom} /></FormField>
       </form>
     </Modal>

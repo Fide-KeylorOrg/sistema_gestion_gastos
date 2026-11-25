@@ -119,13 +119,12 @@ export function parseAdvanceForm(v: { amount: string; date: string; periodId: st
 }
 
 /** HU-21. */
-export function parseSalaryForm(v: { salaryBasis: string; baseSalary: string; workday: string; effectiveFrom: string }): { errors: FieldErrors; baseSalary?: number } {
+export function parseSalaryForm(v: { salaryBasis: string; baseSalary: string; effectiveFrom: string }): { errors: FieldErrors; baseSalary?: number } {
   const e: FieldErrors = {};
   if (!v.salaryBasis) e.salaryBasis = "Seleccione el tipo de salario.";
   const s = parseNumber(v.baseSalary);
   if (isBlank(v.baseSalary)) e.baseSalary = MSG.required;
   else if (s === null || s <= 0) e.baseSalary = MSG.amount;
-  if (isBlank(v.workday)) e.workday = MSG.required;
   if (isBlank(v.effectiveFrom)) e.effectiveFrom = MSG.required;
   else if (!isValidDate(v.effectiveFrom)) e.effectiveFrom = MSG.date;
   return Object.keys(e).length ? { errors: e } : { errors: e, baseSalary: s! };

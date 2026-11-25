@@ -181,7 +181,6 @@ export const demoPayrollService: PayrollService = {
       employeeId,
       salaryBasis: e.salaryBasis,
       baseSalary: e.baseSalary,
-      workday: e.workday,
       vacationBalanceDays: e.vacationBalanceDays,
       overtimeHours: items.filter((i) => i.code === "OVERTIME").reduce((a, i) => a + (i.quantity ?? 0), 0),
       deductions: items.filter((i) => i.kind === "DEDUCTION").map((i) => ({ description: i.description, amount: i.amount })),
@@ -194,8 +193,8 @@ export const demoPayrollService: PayrollService = {
   async updateSalaryData(employeeId, input) {
     const e = db.employees.find((x) => x.id === employeeId);
     if (!e) return fail("NOT_FOUND", "El empleado no existe.");
-    if (!(input.baseSalary > 0) || !input.workday.trim()) return fail("VALIDATION", "Revise los campos indicados.");
-    Object.assign(e, { salaryBasis: input.salaryBasis, baseSalary: input.baseSalary, workday: input.workday.trim(), salaryEffectiveFrom: input.effectiveFrom });
+    if (!(input.baseSalary > 0)) return fail("VALIDATION", "Revise los campos indicados.");
+    Object.assign(e, { salaryBasis: input.salaryBasis, baseSalary: input.baseSalary, salaryEffectiveFrom: input.effectiveFrom });
     db.workHistory.unshift({ id: uid("wh"), employeeId, date: input.effectiveFrom, type: "CAMBIO_SALARIAL", detail: "Datos salariales actualizados.", actorName: "Damaris Salas", amount: input.baseSalary });
     // Las planillas cerradas conservan su instantánea (PayrollLine): no se tocan (HU-21 esc. 3).
     done();

@@ -50,7 +50,7 @@ export const demoEmployeesService: EmployeesService = {
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     const dup = db.employees.find((e) => e.idType === input.idType && e.idNumber === input.idNumber);
     if (dup) return fail("DUPLICATE", `El empleado ya existe (estado actual: ${dup.active ? "Activo" : "Inactivo"}).`, { idNumber: `Ya existe un empleado con esta identificación (${dup.active ? "activo" : "inactivo"}).` });
-    const emp: Employee = { ...input, id: uid("emp"), active: true, vacationBalanceDays: 0, workday: "Por definir", salaryEffectiveFrom: input.hireDate };
+    const emp: Employee = { ...input, id: uid("emp"), active: true, vacationBalanceDays: 0, salaryEffectiveFrom: input.hireDate };
     db.employees.push(emp);
     employeeHistory(emp.id, input.hireDate, "INGRESO", `Ingreso como ${input.position}.`, input.baseSalary);
     done();
