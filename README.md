@@ -21,7 +21,7 @@ Log in as `admin` with the `SEED_ADMIN_PASSWORD` from `.env`.
 
 | Mode | Command | URL | Use it for |
 | --- | --- | --- | --- |
-| Development | `make dev` | printed in the terminal (usually http://localhost:3000) | Coding, with hot reload |
+| Development | `make dev` | http://localhost:3010 | Coding, with hot reload |
 | Production image | `make app` | http://localhost:3100 | Checking a change in the same image AWS runs, before pushing |
 
 Both use the same Postgres container and data. `make app` builds the image, applies pending migrations in a one-off `migrate` container, then starts the app. Open it via `localhost`: the production login cookie is HTTPS-only, and browsers make an exception just for `localhost`.

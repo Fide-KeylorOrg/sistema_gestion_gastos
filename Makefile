@@ -1,11 +1,15 @@
-.PHONY: up down dev app migrate seed reset test
+.PHONY: up stop down dev app migrate seed reset test
 
 # Start the Postgres container (localhost:5434) and wait until it accepts connections.
 up:
 	docker compose up -d --wait db
 
-# Stop every container (Postgres and the production image). Data is kept in the db-data volume.
-down:
+# Stop this project's `next dev` server (its PID is in .next/dev/lock); no-op if it isn't running.
+stop:
+	@node -e "try{process.kill(JSON.parse(require('fs').readFileSync('.next/dev/lock')).pid)}catch{}"
+
+# Stop the dev server and every container (Postgres and the production image). Data is kept in the db-data volume.
+down: stop
 	docker compose --profile app down
 
 # Run the app locally with hot reload, for day-to-day coding.
