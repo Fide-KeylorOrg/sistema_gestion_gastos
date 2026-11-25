@@ -4,7 +4,7 @@ import type { CalendarEvent } from "@/features/calendar/types";
 import { DISABILITY_TYPE_LABEL, fullName } from "@/features/employees/types";
 import { dueStatus, isDueSoon } from "@/features/expenses/status";
 import { lineTotals } from "@/features/payroll/types";
-import { db, payrollLabel } from "./store";
+import { activePayment, db, payrollLabel } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const eachDay = (start: string, end: string) => {
@@ -22,7 +22,7 @@ export const demoCalendarService: CalendarService = {
     const events: CalendarEvent[] = [];
 
     for (const p of db.payrolls) {
-      const date = p.paidAt ?? addDays(p.periodEnd, 1);
+      const date = p.paidAt ?? p.payDate;
       if (!inMonth(date)) continue;
       const lines = db.lines[p.id] ?? [];
       const net = lines.reduce((a, l) => a + lineTotals(l.items).net, 0);
@@ -54,13 +54,14 @@ export const demoCalendarService: CalendarService = {
     for (const due of db.dues.filter((d) => inMonth(d.dueDate))) {
       const e = db.expenses.find((x) => x.id === due.expenseId && !x.deletedAt);
       if (!e) continue;
-      const status = dueStatus(due, DEMO_TODAY);
+      const payment = activePayment(due.id);
+      const status = dueStatus(due.dueDate, !!payment, DEMO_TODAY);
       const cat = db.categories.find((c) => c.id === e.categoryId)?.name ?? "—";
       events.push({
         id: `due-${due.id}`, date: due.dueDate, type: e.kind === "PERMIT" ? "PERMISO" : "PAGO", title: e.concept, subtitle: cat, dueStatus: status, dueSoon: status === "PENDING" && isDueSoon(due.dueDate, DEMO_TODAY),
         detail: [
-          { label: "Concepto", value: e.concept }, { label: "Categoría", value: cat }, { label: "Monto", value: formatCRC(due.paidAmount ?? due.estimatedAmount) },
-          { label: "Vencimiento", value: formatDate(due.dueDate) }, { label: "Estado del pago", value: status === "PAID" ? `Pagado el ${formatDate(due.paidAt)}` : status === "OVERDUE" ? "Vencido" : "Pendiente" },
+          { label: "Concepto", value: e.concept }, { label: "Categoría", value: cat }, { label: "Monto", value: formatCRC(payment?.amount ?? due.estimatedAmount) },
+          { label: "Vencimiento", value: formatDate(due.dueDate) }, { label: "Estado del pago", value: status === "PAID" ? `Pagado el ${formatDate(payment?.paidAt)}` : status === "OVERDUE" ? "Vencido" : "Pendiente" },
         ],
         href: `/gastos/${due.id}`,
       });

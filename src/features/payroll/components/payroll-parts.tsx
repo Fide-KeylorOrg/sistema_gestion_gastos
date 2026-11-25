@@ -17,8 +17,8 @@ export function PayslipModal({ payrollId, employeeId, onClose }: { payrollId: st
   const q = useQuery(["payslip", payrollId, employeeId], () => (payrollId && employeeId ? services.payroll.payslip(payrollId, employeeId) : Promise.resolve(null)));
   const kinds: PayrollItemKind[] = ["EARNING", "DEDUCTION"];
   return (
-    <Modal open={!!payrollId && !!employeeId} onClose={onClose} size="md" title="Colilla de salario" footer={<><Button variant="secondary" onClick={onClose}>Cerrar</Button>{can("planilla.infoSalarial") && <Button icon="print" onClick={() => window.print()}>Imprimir</Button>}</>}>
-      {!can("planilla.infoSalarial") ? <SalaryRestricted /> : !q.data ? <Loading /> : (
+    <Modal open={!!payrollId && !!employeeId} onClose={onClose} size="md" title="Colilla de salario" footer={<><Button variant="secondary" onClick={onClose}>Cerrar</Button>{can("payroll.salaries") && <Button icon="print" onClick={() => window.print()}>Imprimir</Button>}</>}>
+      {!can("payroll.salaries") ? <SalaryRestricted /> : !q.data ? <Loading /> : (
         <div className="print-area space-y-4 text-sm">
           <div className="border-b border-slate-200 pb-3">
             <p className="text-base font-bold text-slate-900">Supermercado Los Ángeles</p>

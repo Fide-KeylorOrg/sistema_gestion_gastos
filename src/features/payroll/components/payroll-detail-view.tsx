@@ -41,7 +41,7 @@ export function PayrollDetailView({ payrollId }: { payrollId: string }) {
         subtitle={<span className="inline-flex items-center gap-2"><PayrollStatusBadge status={payroll.status} />{closed && payroll.closedAt && <span>Cerrada el {formatDate(payroll.closedAt)}</span>}{recalcPending && <RecalcBadge />}</span>}
         backHref="/planilla" backLabel="Volver a planillas"
         actions={<>
-          {!closed && can("planilla.editar") && <Button variant="secondary" icon="lock" onClick={() => { setProblem(null); setClosing(true); }}>Cerrar planilla</Button>}
+          {!closed && can("payroll.edit") && <Button variant="secondary" icon="lock" onClick={() => { setProblem(null); setClosing(true); }}>Cerrar planilla</Button>}
           <Button variant="secondary" icon="receipt" onClick={async () => setCcss(await services.payroll.checkCcss(payrollId))}>Generar archivo CCSS</Button>
           <Button icon="receipt_long" onClick={() => setSlips(true)}>Generar comprobantes</Button>
         </>} />
@@ -88,7 +88,7 @@ export function PayrollDetailView({ payrollId }: { payrollId: string }) {
       </Modal>
 
       <Modal open={slips} onClose={() => setSlips(false)} size="md" title="Comprobantes de pago" subtitle="Colillas del período" footer={<Button variant="secondary" onClick={() => setSlips(false)}>Cerrar</Button>}>
-        {!can("planilla.infoSalarial") ? <Alert tone="warning" title="Información salarial restringida">No tiene permiso para consultar comprobantes.</Alert> : (
+        {!can("payroll.salaries") ? <Alert tone="warning" title="Información salarial restringida">No tiene permiso para consultar comprobantes.</Alert> : (
           <ul className="divide-y divide-slate-100">{lines.map((l) => <li key={l.employeeId} className="flex items-center justify-between py-2 text-sm"><span>{l.employeeName}</span><Button variant="ghost" className="h-8" icon="visibility" onClick={() => setSlip(l.employeeId)}>Ver colilla</Button></li>)}</ul>
         )}
       </Modal>

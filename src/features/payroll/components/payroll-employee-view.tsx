@@ -36,13 +36,13 @@ export function PayrollEmployeeView({ payrollId, employeeId }: { payrollId: stri
     <>
       <PageHeader title={line.employeeName} subtitle={<span className="inline-flex flex-wrap items-center gap-2">{line.idNumber} · {line.position} · Planilla {formatDate(payroll.periodStart)} – {formatDate(payroll.periodEnd)} <PayrollStatusBadge status={payroll.status} />{line.recalcPending && <RecalcBadge />}</span>}
         backHref={`/planilla/${payrollId}`} backLabel="Volver a la planilla"
-        actions={<>{can("planilla.infoSalarial") && <Button variant="secondary" icon="receipt_long" onClick={() => setSlip(true)}>Ver colilla</Button>}{!closed && can("planilla.crear") && <Button icon="add_circle" onClick={() => setNovelty({ payrollId, employeeId })}>Registrar horas y permisos</Button>}</>} />
+        actions={<>{can("payroll.salaries") && <Button variant="secondary" icon="receipt_long" onClick={() => setSlip(true)}>Ver colilla</Button>}{!closed && can("payroll.edit") && <Button icon="add_circle" onClick={() => setNovelty({ payrollId, employeeId })}>Registrar horas y permisos</Button>}</>} />
       <div className="mb-4 space-y-3"><DemoNotice /><ServerPending>Los montos son de ejemplo. Al guardar cambios se registran las novedades y la línea queda pendiente de recálculo por el servidor.</ServerPending></div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card title="Desglose detallado de planilla">
-            {!can("planilla.infoSalarial") ? <SalaryRestricted /> : (
+            {!can("payroll.salaries") ? <SalaryRestricted /> : (
               <div className="space-y-5">
                 {kinds.map((k) => { const items = line.items.filter((i) => i.kind === k); return (
                   <div key={k}><h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{ITEM_KIND_LABEL[k]}</h3>
@@ -61,12 +61,12 @@ export function PayrollEmployeeView({ payrollId, employeeId }: { payrollId: stri
               <TableWrap><Table caption="Novedades"><THead><Th>Fecha</Th><Th>Tipo</Th><Th numeric>Cantidad</Th><Th>Observación</Th><Th>Estado</Th><Th className="text-right">Acciones</Th></THead>
                 <tbody>{novelties.data.map((n) => (
                   <Tr key={n.id}><Td className="tnum">{formatDate(n.date)}</Td><Td>{NOVELTY_TYPE_LABEL[n.type]}</Td><Td numeric>{n.quantity} {NOVELTY_UNIT[n.type]}</Td><Td>{n.note ?? "—"}</Td><Td>{n.cancelled ? <Badge tone="neutral">Anulado</Badge> : <Badge tone="success">Registrado</Badge>}</Td>
-                    <Td className="text-right">{!closed && !n.cancelled && can("planilla.editar") && <div className="flex justify-end gap-1"><Button variant="ghost" className="h-8 px-2" icon="edit" onClick={() => setNovelty({ record: n })}>Modificar</Button><Button variant="ghost" className="h-8 px-2 text-red-600" icon="block" onClick={() => setCancelId(n.id)}>Anular</Button></div>}</Td></Tr>))}</tbody></Table></TableWrap>
+                    <Td className="text-right">{!closed && !n.cancelled && can("payroll.edit") && <div className="flex justify-end gap-1"><Button variant="ghost" className="h-8 px-2" icon="edit" onClick={() => setNovelty({ record: n })}>Modificar</Button><Button variant="ghost" className="h-8 px-2 text-red-600" icon="block" onClick={() => setCancelId(n.id)}>Anular</Button></div>}</Td></Tr>))}</tbody></Table></TableWrap>
             )}
           </Card>
         </div>
 
-        <EditLineCard payrollId={payrollId} employeeId={employeeId} closed={closed} canEdit={can("planilla.editar")} line={line} />
+        <EditLineCard payrollId={payrollId} employeeId={employeeId} closed={closed} canEdit={can("payroll.edit")} line={line} />
       </div>
 
       <NoveltyModal state={novelty} onClose={() => setNovelty(null)} />

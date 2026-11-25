@@ -1,70 +1,52 @@
-/**
- * Permisos por módulo y acción (HU-9, HU-11, HU-12): consultar, crear, editar, consultar información salarial.
- * Representación del FRONTEND. La autorización real sigue en el servidor (src/lib/permissions.ts, requirePermission).
- * Al conectar el backend, el mapeo de claves está en `permissionsFromServer`.
- */
-export const MODULES = ["planilla", "gastos", "dashboard", "calendario", "usuarios"] as const;
-export type ModuleKey = (typeof MODULES)[number];
+import { PERMISSIONS, type Permission } from "@/lib/permissions";
 
-export type ActionKey = "consultar" | "crear" | "editar" | "infoSalarial" | "administrar";
+/**
+ * Permisos del frontend = claves del servidor (src/lib/permissions.ts), sin traducción.
+ * Aquí solo se decide qué mostrar u ocultar; la autorización real sigue en el servidor (requirePermission).
+ */
+export type PermissionKey = Permission;
+export const ALL_PERMISSIONS: PermissionKey[] = [...PERMISSIONS];
+export const ADMIN_PERMISSION: PermissionKey = "users.manage";
+
+/** Agrupación para la matriz de permisos (HU-5, HU-9): módulo.acción. */
+export const MODULES = ["payroll", "expenses", "dashboard", "calendar", "users"] as const;
+export type ModuleKey = (typeof MODULES)[number];
+export type ActionKey = "view" | "edit" | "salaries" | "manage";
 
 export const MODULE_ACTIONS: Record<ModuleKey, ActionKey[]> = {
-  planilla: ["consultar", "crear", "editar", "infoSalarial"],
-  gastos: ["consultar", "crear", "editar"],
-  dashboard: ["consultar", "infoSalarial"],
-  calendario: ["consultar", "infoSalarial"],
-  usuarios: ["administrar"],
+  payroll: ["view", "edit", "salaries"],
+  expenses: ["view", "edit"],
+  dashboard: ["view"],
+  calendar: ["view"],
+  users: ["manage"],
 };
 
 export const MODULE_LABEL: Record<ModuleKey, string> = {
-  planilla: "Planilla y empleados",
-  gastos: "Gastos",
+  payroll: "Planilla y empleados",
+  expenses: "Gastos",
   dashboard: "Dashboard",
-  calendario: "Calendario",
-  usuarios: "Usuarios y roles",
+  calendar: "Calendario",
+  users: "Usuarios y roles",
 };
 
 export const ACTION_LABEL: Record<ActionKey, string> = {
-  consultar: "Consultar",
-  crear: "Crear",
-  editar: "Editar",
-  infoSalarial: "Información salarial",
-  administrar: "Administrar usuarios y roles",
+  view: "Consultar",
+  edit: "Crear y editar",
+  salaries: "Información salarial",
+  manage: "Administrar usuarios y roles",
 };
 
-export type PermissionKey = `${ModuleKey}.${ActionKey}`;
-
-export const ALL_PERMISSIONS: PermissionKey[] = MODULES.flatMap((m) => MODULE_ACTIONS[m].map((a) => `${m}.${a}` as PermissionKey));
-export const ADMIN_PERMISSION: PermissionKey = "usuarios.administrar";
-
-/** Claves actuales del servidor (src/lib/permissions.ts) → claves del frontend. */
-export function permissionsFromServer(keys: string[]): PermissionKey[] {
-  const map: Record<string, PermissionKey[]> = {
-    "users.manage": ["usuarios.administrar"],
-    "dashboard.view": ["dashboard.consultar"],
-    "payroll.view": ["planilla.consultar"],
-    "payroll.edit": ["planilla.crear", "planilla.editar"],
-    "payroll.salaries": ["planilla.infoSalarial", "dashboard.infoSalarial", "calendario.infoSalarial"],
-    "expenses.view": ["gastos.consultar"],
-    "expenses.edit": ["gastos.crear", "gastos.editar"],
-    "calendar.view": ["calendario.consultar"],
-  };
-  return [...new Set(keys.flatMap((k) => map[k] ?? []))];
-}
-
-/** Permiso mínimo para abrir cada ruta (HU-12 escenario 2). Las más específicas van primero. */
+/** Permiso mínimo para abrir cada ruta (HU-9 escenario 2). Las más específicas van primero. */
 const ROUTE_RULES: { test: RegExp; permission: PermissionKey }[] = [
-  { test: /^\/gastos\/nuevo/, permission: "gastos.crear" },
-  { test: /^\/gastos\/[^/]+\/editar/, permission: "gastos.editar" },
-  { test: /^\/gastos\/(notificaciones|categorias)/, permission: "gastos.consultar" },
-  { test: /^\/empleados\/nuevo/, permission: "planilla.crear" },
-  { test: /^\/empleados\/[^/]+\/editar/, permission: "planilla.editar" },
-  { test: /^\/planilla\/(cargas-sociales|liquidacion)/, permission: "planilla.consultar" },
-  { test: /^\/(planilla|empleados)/, permission: "planilla.consultar" },
-  { test: /^\/gastos/, permission: "gastos.consultar" },
-  { test: /^\/calendario/, permission: "calendario.consultar" },
-  { test: /^\/usuarios/, permission: "usuarios.administrar" },
-  { test: /^\/$/, permission: "dashboard.consultar" },
+  { test: /^\/gastos\/nuevo/, permission: "expenses.edit" },
+  { test: /^\/gastos\/[^/]+\/editar/, permission: "expenses.edit" },
+  { test: /^\/empleados\/nuevo/, permission: "payroll.edit" },
+  { test: /^\/empleados\/[^/]+\/editar/, permission: "payroll.edit" },
+  { test: /^\/(planilla|empleados)/, permission: "payroll.view" },
+  { test: /^\/gastos/, permission: "expenses.view" },
+  { test: /^\/calendario/, permission: "calendar.view" },
+  { test: /^\/usuarios/, permission: "users.manage" },
+  { test: /^\/$/, permission: "dashboard.view" },
 ];
 
 export function requiredPermissionForRoute(pathname: string): PermissionKey | null {

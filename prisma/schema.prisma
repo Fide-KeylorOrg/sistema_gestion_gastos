@@ -106,6 +106,7 @@ model Payroll {
   id          String        @id @default(uuid(7)) @db.Uuid
   periodStart DateTime      @db.Date
   periodEnd   DateTime      @db.Date
+  payDate     DateTime      @db.Date // scheduled payment date (dashboard "próximos pagos de planilla")
   closedAt    DateTime?     @db.Timestamptz(3)
   paidAt      DateTime?     @db.Date
   createdAt   DateTime      @default(now()) @db.Timestamptz(3)
@@ -172,7 +173,6 @@ enum Recurrence {
   WEEKLY
   BIWEEKLY
   MONTHLY
-  BIMONTHLY
   QUARTERLY
   SEMIANNUAL
   YEARLY
@@ -190,7 +190,7 @@ model Expense {
   notes            String?
   recurrence       Recurrence      @default(NONE)
   recurrenceEndsOn DateTime?       @db.Date
-  notifyDaysBefore Int?            @default(7) // null = notifications off
+  notifyDaysBefore Int?            @default(7) // 1-10; null = notifications off
   extraRecipients  String[]
   deletedAt        DateTime?       @db.Timestamptz(3)
   createdAt        DateTime        @default(now()) @db.Timestamptz(3)
@@ -200,21 +200,45 @@ model Expense {
   @@index([categoryId])
 }
 
-// Status is derived: paid if paidAt is set, overdue if dueDate < today, otherwise pending.
+// Status is derived: paid if it has a payment that isn't voided, overdue if dueDate < today, otherwise pending.
 model ExpenseDue {
-  id              String            @id @default(uuid(7)) @db.Uuid
-  expenseId       String            @db.Uuid
-  expense         Expense           @relation(fields: [expenseId], references: [id])
-  dueDate         DateTime          @db.Date
-  estimatedAmount Decimal           @db.Decimal(14, 2) // copied from Expense, so later edits don't rewrite history
-  paidAt          DateTime?         @db.Date
-  paidAmount      Decimal?          @db.Decimal(14, 2)
-  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime          @updatedAt @db.Timestamptz(3)
-  notifications   NotificationLog[]
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  expenseId            String            @db.Uuid
+  expense              Expense           @relation(fields: [expenseId], references: [id])
+  dueDate              DateTime          @db.Date
+  estimatedAmount      Decimal           @db.Decimal(14, 2) // copied from Expense, so later edits don't rewrite history
+  // Set when paying the previous due created this one; voiding that payment removes it if still untouched (HU-39).
+  generatedByPaymentId String?           @unique @db.Uuid
+  generatedByPayment   ExpensePayment?   @relation("GeneratedDue", fields: [generatedByPaymentId], references: [id])
+  createdAt            DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
+  payments             ExpensePayment[]  @relation("DuePayments")
+  notifications        NotificationLog[]
 
   @@unique([expenseId, dueDate])
   @@index([dueDate])
+}
+
+// Voided payments are kept with their reason (HU-39). At most one non-voided payment per due (partial unique index).
+model ExpensePayment {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  dueId        String      @db.Uuid
+  due          ExpenseDue  @relation("DuePayments", fields: [dueId], references: [id])
+  paidAt       DateTime    @db.Date
+  amount       Decimal     @db.Decimal(14, 2)
+  voidedAt     DateTime?   @db.Timestamptz(3)
+  voidReason   String?
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  generatedDue ExpenseDue? @relation("GeneratedDue")
+
+  @@index([dueId])
+}
+
+// Receive every expense notification; Expense.extraRecipients are added on top (HU-36).
+model NotificationRecipient {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  email     String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
 model NotificationLog {

@@ -3,12 +3,12 @@ import type { GlobalRate, Novelty, Payroll, PayrollItem, PayrollLine } from "@/f
 import { fullName } from "@/features/employees/types";
 
 export const demoPayrolls = (): Payroll[] => [
-  { id: "pay-1", periodStart: "2026-08-01", periodEnd: "2026-08-15", status: "CLOSED", closedAt: "2026-08-16T09:00:00-06:00", paidAt: "2026-08-16" },
-  { id: "pay-2", periodStart: "2026-08-16", periodEnd: "2026-08-31", status: "CLOSED", closedAt: "2026-09-01T09:00:00-06:00", paidAt: "2026-09-01" },
-  { id: "pay-3", periodStart: "2026-09-01", periodEnd: "2026-09-15", status: "CLOSED", closedAt: "2026-09-16T09:00:00-06:00", paidAt: "2026-09-16" },
-  { id: "pay-4", periodStart: "2026-09-16", periodEnd: "2026-09-30", status: "CLOSED", closedAt: "2026-10-01T09:00:00-06:00", paidAt: "2026-10-01" },
-  { id: "pay-5", periodStart: "2026-10-01", periodEnd: "2026-10-15", status: "CLOSED", closedAt: "2026-10-16T09:00:00-06:00", paidAt: "2026-10-16" },
-  { id: "pay-6", periodStart: "2026-10-16", periodEnd: "2026-10-31", status: "DRAFT" },
+  { id: "pay-1", periodStart: "2026-08-01", periodEnd: "2026-08-15", payDate: "2026-08-16", status: "CLOSED", closedAt: "2026-08-16T09:00:00-06:00", paidAt: "2026-08-16" },
+  { id: "pay-2", periodStart: "2026-08-16", periodEnd: "2026-08-31", payDate: "2026-09-01", status: "CLOSED", closedAt: "2026-09-01T09:00:00-06:00", paidAt: "2026-09-01" },
+  { id: "pay-3", periodStart: "2026-09-01", periodEnd: "2026-09-15", payDate: "2026-09-16", status: "CLOSED", closedAt: "2026-09-16T09:00:00-06:00", paidAt: "2026-09-16" },
+  { id: "pay-4", periodStart: "2026-09-16", periodEnd: "2026-09-30", payDate: "2026-10-01", status: "CLOSED", closedAt: "2026-10-01T09:00:00-06:00", paidAt: "2026-10-01" },
+  { id: "pay-5", periodStart: "2026-10-01", periodEnd: "2026-10-15", payDate: "2026-10-16", status: "CLOSED", closedAt: "2026-10-16T09:00:00-06:00", paidAt: "2026-10-16" },
+  { id: "pay-6", periodStart: "2026-10-16", periodEnd: "2026-10-31", payDate: "2026-11-01", status: "DRAFT" },
 ];
 
 const OVERTIME_BY_PERIOD: Record<string, Record<string, number>> = {

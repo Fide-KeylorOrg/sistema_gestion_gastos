@@ -24,7 +24,7 @@ export function PayrollListView() {
 
   return (
     <>
-      <PageHeader title="Planillas" subtitle="Planillas quincenales por período." actions={can("planilla.crear") && <Button icon="add" onClick={() => setCreating(true)}>Crear planilla</Button>} />
+      <PageHeader title="Planillas" subtitle="Planillas quincenales por período." actions={can("payroll.edit") && <Button icon="add" onClick={() => setCreating(true)}>Crear planilla</Button>} />
       <div className="mb-4 space-y-3"><DemoNotice /><ServerPending>Los montos de las planillas los calculará el servidor con las reglas aprobadas. Aquí se muestran valores de ejemplo.</ServerPending></div>
       <div className="grid gap-6">
         <ConsultPeriod />

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { services } from "@/services";
 import type { FieldErrors } from "@/lib/result";
-import { Alert, Button, Card, DemoNotice, FormField, Input, PageHeader, useToast } from "@/components/ui";
+import { Alert, Button, Card, FormField, Input, PageHeader, useToast } from "@/components/ui";
 import { validateChangePassword } from "@/features/users/validation";
 import { PASSWORD_MIN_LENGTH } from "@/lib/validation";
 
@@ -36,7 +36,7 @@ export function ChangePasswordView({ forced }: { forced: boolean }) {
       <PageHeader title="Cambiar contraseña" subtitle="Mantenga segura su cuenta." />
       <div className="mb-4 max-w-xl space-y-3">
         {forced && <Alert tone="warning" title="Contraseña temporal">Debe definir una contraseña nueva antes de acceder a cualquier otra función.</Alert>}
-        <DemoNotice>En esta demostración la contraseña actual es <code className="font-semibold">demo-clave-actual-12</code>. El cambio no afecta su acceso real al sistema.</DemoNotice>
+        <Alert tone="info">En esta demostración la contraseña actual es <code className="font-semibold">demo-clave-actual-12</code>. El cambio no afecta su acceso real al sistema.</Alert>
       </div>
       <Card className="max-w-xl">
         <form onSubmit={submit} noValidate className="space-y-4">

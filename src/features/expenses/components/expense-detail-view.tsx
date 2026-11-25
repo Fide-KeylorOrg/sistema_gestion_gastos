@@ -7,14 +7,14 @@ import { services } from "@/services";
 import { useQuery } from "@/lib/use-query";
 import { addDays, formatBytes, formatCRC, formatDate, formatDateTime } from "@/lib/format";
 import type { FieldErrors } from "@/lib/result";
-import { Alert, Badge, Button, Card, ConfirmDialog, DemoNotice, EmptyState, ErrorState, FileInput, FormField, Input, Loading, Modal, PageHeader, useToast } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, DemoNotice, EmptyState, ErrorState, FileInput, FormField, Input, Loading, Modal, PageHeader, Textarea, useToast } from "@/components/ui";
 import { useSession } from "@/features/access/demo-session";
 import { DueStatusBadge } from "./due-status-badge";
-import { parsePaymentForm } from "../validation";
+import { parsePaymentForm, validateVoidReason } from "../validation";
 import { RECURRENCE_LABEL, type Attachment } from "../types";
 import { DEMO_TODAY } from "@/services/demo/clock";
 
-type Dialog = "pay" | "revert" | "delete" | "finalize" | null;
+type Dialog = "pay" | "void" | "delete" | "finalize" | null;
 
 export function ExpenseDetailView({ dueId }: { dueId: string }) {
   const q = useQuery(["due", dueId], () => services.expenses.getDue(dueId));
@@ -29,9 +29,9 @@ export function ExpenseDetailView({ dueId }: { dueId: string }) {
   if (q.loading) return <Loading />;
   if (q.error) return <ErrorState message={q.error} />;
   if (!q.data) return <><PageHeader title="Gasto no encontrado" backHref="/gastos" backLabel="Volver a gastos" /><EmptyState message="El gasto solicitado no existe." /></>;
-  const { due, expense, categoryName, status, history, nextDue } = q.data;
+  const { due, payment, expense, categoryName, status, history, nextDue, voidedPayments } = q.data;
   const paid = status === "PAID";
-  const canEdit = can("gastos.editar");
+  const canEdit = can("expenses.edit");
   const close = () => { setDialog(null); setProblem(null); };
 
   async function run(fn: () => Promise<{ ok: boolean; error?: { message: string } }>, success: string, after?: () => void) {
@@ -57,7 +57,7 @@ export function ExpenseDetailView({ dueId }: { dueId: string }) {
         actions={canEdit && (
           <>
             {!paid && <Button icon="check_circle" onClick={() => setDialog("pay")}>Marcar como pagado</Button>}
-            {paid && <Button variant="secondary" icon="history" onClick={() => setDialog("revert")}>Revertir pago</Button>}
+            {paid && <Button variant="secondary" icon="history" onClick={() => setDialog("void")}>Anular pago</Button>}
             <Button variant="secondary" icon="edit" href={`/gastos/${expense.id}/editar`}>Editar gasto</Button>
             {expense.recurrence !== "NONE" && !expense.recurrenceEndsOn && <Button variant="secondary" icon="event_busy" onClick={() => setDialog("finalize")}>Finalizar recurrencia</Button>}
             <Button variant="danger" icon="delete" onClick={() => setDialog("delete")}>Eliminar</Button>
@@ -76,9 +76,9 @@ export function ExpenseDetailView({ dueId }: { dueId: string }) {
               <Item label="Categoría" value={categoryName} />
               <Item label="Tipo" value={expense.kind === "PERMIT" ? "Permiso (sanitario o comercial)" : "Pago / obligación"} />
               <Item label="Monto estimado" value={formatCRC(due.estimatedAmount)} />
-              <Item label="Monto pagado" value={due.paidAmount !== undefined ? formatCRC(due.paidAmount) : "—"} />
+              <Item label="Monto pagado" value={payment ? formatCRC(payment.amount) : "—"} />
               <Item label="Fecha de vencimiento" value={formatDate(due.dueDate)} />
-              <Item label="Fecha de pago" value={formatDate(due.paidAt)} />
+              <Item label="Fecha de pago" value={formatDate(payment?.paidAt)} />
               <Item label="Número de referencia" value={expense.referenceNumber ?? "—"} />
               <Item label="Recurrencia" value={RECURRENCE_LABEL[expense.recurrence] + (expense.recurrenceEndsOn ? ` (hasta ${formatDate(expense.recurrenceEndsOn)})` : "")} />
             </dl>
@@ -87,8 +87,18 @@ export function ExpenseDetailView({ dueId }: { dueId: string }) {
           <Card title="Comprobantes">
             <div className="space-y-3 text-sm">
               <Doc label="Comprobante del gasto" a={expense.attachment} />
-              <Doc label="Comprobante del pago" a={due.receipt} />
+              <Doc label="Comprobante del pago" a={payment?.receipt} />
             </div>
+            {voidedPayments.length > 0 && (
+              <ul className="mt-4 space-y-2 text-sm">
+                {voidedPayments.map((p) => (
+                  <li key={p.id} className="rounded-md border border-slate-200 p-3">
+                    <Badge tone="neutral">Anulado</Badge> <span className="font-medium text-slate-900">{formatCRC(p.amount)}</span> pagado el {formatDate(p.paidAt)}
+                    <p className="text-slate-600">Motivo: {p.voidReason} · anulado {formatDateTime(p.voidedAt!)}{p.receipt && ` · comprobante: ${p.receipt.name}`}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-3 text-xs text-slate-500">La descarga real estará disponible cuando el backend almacene los archivos.</p>
           </Card>
         </div>
@@ -120,7 +130,7 @@ export function ExpenseDetailView({ dueId }: { dueId: string }) {
       </div>
 
       <PayModal open={dialog === "pay"} onClose={close} estimated={due.estimatedAmount} recurring={expense.recurrence !== "NONE"} onSave={(input, onDone) => run(() => services.expenses.markPaid(dueId, input), "Pago registrado correctamente.", onDone)} busy={busy} problem={problem} />
-      <ConfirmDialog open={dialog === "revert"} title="Confirmar reversión de pago" message="El gasto volverá a estado pendiente, se reactivarán sus recordatorios y se conservará el historial de cambios." confirmLabel="Confirmar reversión" busy={busy} onCancel={close} onConfirm={() => run(() => services.expenses.revertPayment(dueId), "Pago revertido; el gasto volvió a pendiente.")}>{problem && <Alert tone="danger">{problem}</Alert>}</ConfirmDialog>
+      <VoidDialog open={dialog === "void"} onClose={close} busy={busy} problem={problem} onSave={(reason) => run(() => services.expenses.voidPayment(dueId, reason), "Pago anulado; el gasto volvió a pendiente.")} />
       <ConfirmDialog open={dialog === "delete"} title="¿Desea eliminar este gasto?" message="El gasto dejará de aparecer en los registros activos." tone="danger" confirmLabel="Eliminar gasto" busy={busy} onCancel={close} onConfirm={() => run(() => services.expenses.remove(expense.id), "Gasto eliminado correctamente.", () => router.push("/gastos"))}>{problem && <Alert tone="danger">{problem}</Alert>}</ConfirmDialog>
       <FinalizeModal open={dialog === "finalize"} onClose={close} busy={busy} problem={problem} onSave={(d) => run(() => services.expenses.finalizeRecurrence(expense.id, d), "Recurrencia finalizada.")} />
     </>
@@ -171,6 +181,25 @@ function PayModal({ open, onClose, estimated, recurring, onSave, busy, problem }
         {recurring && <p className="text-xs text-slate-500">Al registrar el pago se creará automáticamente el siguiente vencimiento.</p>}
       </form>
     </Modal>
+  );
+}
+
+/** HU-39: el pago queda como Anulado con su motivo; el gasto vuelve a pendiente o vencido. */
+function VoidDialog({ open, onClose, onSave, busy, problem }: { open: boolean; onClose: () => void; onSave: (reason: string) => void; busy: boolean; problem: string | null }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string>();
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) { setWasOpen(open); if (open) { setReason(""); setError(undefined); } }
+  function confirm() {
+    const errors = validateVoidReason(reason);
+    setError(errors.reason);
+    if (!errors.reason) onSave(reason);
+  }
+  return (
+    <ConfirmDialog open={open} title="Anular pago" message="El pago quedará como Anulado en el historial, con su fecha, monto, comprobante y motivo. El gasto volverá a pendiente o vencido según su fecha." confirmLabel="Anular pago" tone="danger" busy={busy} onCancel={onClose} onConfirm={confirm}>
+      <FormField id="void-reason" label="Motivo de la anulación" required error={error}><Textarea id="void-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} invalid={!!error} /></FormField>
+      {problem && <Alert tone="danger" className="mt-3">{problem}</Alert>}
+    </ConfirmDialog>
   );
 }
 

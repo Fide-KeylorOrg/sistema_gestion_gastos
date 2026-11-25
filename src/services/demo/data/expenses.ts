@@ -1,4 +1,4 @@
-import type { Expense, ExpenseCategory, ExpenseDue, ExpenseHistoryEntry } from "@/features/expenses/types";
+import type { Expense, ExpenseCategory, ExpenseDue, ExpenseHistoryEntry, ExpensePayment } from "@/features/expenses/types";
 
 export const demoCategories = (): ExpenseCategory[] => [
   { id: "cat-serv", name: "Servicios públicos", description: "Electricidad, agua y telecomunicaciones", active: true },
@@ -32,18 +32,31 @@ export const demoExpenses = (): Expense[] =>
     recurrence: s.rec, notifyDaysBefore: s.notify, extraRecipients: s.extra ?? [],
   }));
 
+const CREATED = "2026-01-01T08:00:00-06:00";
+const payId = (s: Seed, i: number) => `${s.id}-p${i}`;
+
+/** Cada vencimiento después del primero lo generó el pago del anterior (HU-38). */
 export const demoDues = (): ExpenseDue[] =>
-  SEEDS.flatMap((s) => [
-    ...(s.hist ?? []).map(([dueDate, paidAt, paidAmount], i): ExpenseDue => ({
-      id: `${s.id}-h${i}`, expenseId: s.id, dueDate, estimatedAmount: s.amount, paidAt, paidAmount,
-      receipt: i === (s.hist!.length - 1) ? { name: `comprobante-${s.id}-${paidAt}.pdf`, size: 184320, uploadedAt: `${paidAt}T10:00:00-06:00` } : undefined,
+  SEEDS.flatMap((s) => {
+    const hist = s.hist ?? [];
+    const generatedBy = (i: number) => (i > 0 ? payId(s, i - 1) : undefined);
+    return [
+      ...hist.map(([dueDate], i): ExpenseDue => ({ id: `${s.id}-h${i}`, expenseId: s.id, dueDate, estimatedAmount: s.amount, generatedByPaymentId: generatedBy(i), createdAt: CREATED, updatedAt: CREATED })),
+      { id: `${s.id}-open`, expenseId: s.id, dueDate: s.due, estimatedAmount: s.amount, generatedByPaymentId: generatedBy(hist.length), createdAt: CREATED, updatedAt: CREATED },
+    ];
+  });
+
+export const demoPayments = (): ExpensePayment[] =>
+  SEEDS.flatMap((s) =>
+    (s.hist ?? []).map(([, paidAt, amount], i) => ({
+      id: payId(s, i), dueId: `${s.id}-h${i}`, paidAt, amount,
+      receipt: i === s.hist!.length - 1 ? { name: `comprobante-${s.id}-${paidAt}.pdf`, size: 184320, uploadedAt: `${paidAt}T10:00:00-06:00` } : undefined,
     })),
-    { id: `${s.id}-open`, expenseId: s.id, dueDate: s.due, estimatedAmount: s.amount } satisfies ExpenseDue,
-  ]);
+  );
 
 export const demoExpenseHistory = (): ExpenseHistoryEntry[] => [
   { id: "eh-1", expenseId: "e4", at: "2026-10-28T10:15:00-06:00", actorName: "Damaris Salas", action: "Registro", detail: "Gasto registrado en estado pendiente." },
   { id: "eh-2", expenseId: "e1", at: "2026-10-16T09:00:00-06:00", actorName: "Damaris Salas", action: "Pago registrado", detail: "Pagado ₡980 000,00 (estimado ₡720 000,00)." },
-  { id: "eh-3", expenseId: "e1", at: "2026-10-16T09:20:00-06:00", actorName: "Damaris Salas", action: "Pago revertido", detail: "Marcado por error; el gasto volvió a pendiente." },
+  { id: "eh-3", expenseId: "e1", at: "2026-10-16T09:20:00-06:00", actorName: "Damaris Salas", action: "Pago anulado", detail: "Motivo: marcado por error. El gasto volvió a pendiente." },
   { id: "eh-4", expenseId: "e1", at: "2026-10-16T09:30:00-06:00", actorName: "Damaris Salas", action: "Pago registrado", detail: "Pagado ₡980 000,00." },
 ];

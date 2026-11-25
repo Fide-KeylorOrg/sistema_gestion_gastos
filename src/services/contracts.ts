@@ -60,7 +60,7 @@ export interface ExpensesService {
   update(expenseId: string, input: ExpenseInput): Promise<Result<{ dueId: string }>>; // HU-39, 50 (tercer escenario)
   remove(expenseId: string): Promise<Result>; // HU-49
   markPaid(dueId: string, input: PaymentInput): Promise<Result<{ nextDueId?: string }>>; // HU-44, 51, 53
-  revertPayment(dueId: string): Promise<Result>; // HU-45
+  voidPayment(dueId: string, reason: string): Promise<Result>; // HU-39
   finalizeRecurrence(expenseId: string, endsOn: ISODate): Promise<Result>; // HU-54
   listCategories(): Promise<CategoryWithCount[]>; // HU-47, 48
   createCategory(input: { name: string; description?: string }): Promise<Result<ExpenseCategory>>; // HU-48

@@ -31,7 +31,7 @@ export function ExpensesListView() {
 
   return (
     <>
-      <PageHeader title="Gastos y obligaciones" subtitle="Compromisos económicos del negocio, su vencimiento y su estado." actions={can("gastos.crear") && <Button href="/gastos/nuevo" icon="add_circle">Registrar gasto</Button>} />
+      <PageHeader title="Gastos y obligaciones" subtitle="Compromisos económicos del negocio, su vencimiento y su estado." actions={can("expenses.edit") && <Button href="/gastos/nuevo" icon="add_circle">Registrar gasto</Button>} />
       <div className="mb-4"><DemoNotice /></div>
 
       <Card padded={false}>
@@ -86,9 +86,9 @@ export function ExpensesListView() {
                       <Tr key={r.due.id}>
                         <Td className="font-medium text-slate-900">{r.expense.concept}{r.expense.kind === "PERMIT" && <span className="ml-2 text-xs font-normal text-slate-500">(permiso)</span>}</Td>
                         <Td>{r.categoryName}</Td>
-                        <Td numeric>{formatCRC(r.due.paidAmount ?? r.due.estimatedAmount)}</Td>
+                        <Td numeric>{formatCRC(r.payment?.amount ?? r.due.estimatedAmount)}</Td>
                         <Td className="tnum whitespace-nowrap">{formatDate(r.due.dueDate)}</Td>
-                        {tab === "history" && <Td className="tnum whitespace-nowrap">{formatDate(r.due.paidAt)}</Td>}
+                        {tab === "history" && <Td className="tnum whitespace-nowrap">{formatDate(r.payment?.paidAt)}</Td>}
                         <Td>{RECURRENCE_LABEL[r.expense.recurrence]}</Td>
                         <Td><DueStatusBadge row={r} /></Td>
                         <Td className="text-right"><Link href={`/gastos/${r.due.id}`} className="font-medium text-blue-700 hover:underline">Ver detalle</Link></Td>

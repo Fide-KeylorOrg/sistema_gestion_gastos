@@ -10,7 +10,7 @@ Requires Node 24+, Docker and `make`.
 
 ```bash
 cp .env.example .env   # set SEED_ADMIN_PASSWORD (12+ characters)
-make install           # npm install + generates the Prisma client
+npm install            # also generates the Prisma client
 make migrate           # starts Postgres in Docker (localhost:5434) and applies migrations
 make seed              # creates the "Administrador" role and the "admin" user
 ```
@@ -32,7 +32,7 @@ Both use the same Postgres container and data. `make app` builds the image, appl
 | --- | --- |
 | `make migrate name=add_x` | Create and apply a migration after editing `prisma/schema.prisma` |
 | `make test` | Run tests against a separate `gastos_test` database |
-| `make lint` / `make build` | Lint / production build |
+| `npm run lint` / `npm run build` | Lint / production build |
 | `make reset` | Wipe the dev database, re-apply migrations and re-seed |
 | `make down` | Stop all containers (data is kept in the `db-data` volume) |
 
@@ -44,3 +44,4 @@ Both use the same Postgres container and data. `make app` builds the image, appl
 - **Audit log:** write with `audit()` from `src/lib/audit.ts`. The table is append-only at the database level.
 - **Cache Components:** read the session only inside a `<Suspense>` boundary. Pages under `src/app/(app)` get one from `loading.tsx`.
 - **Tests:** `*.test.ts` next to the code, using `node:test` run through `tsx`.
+- **Migrations:** nothing is deployed yet, so `prisma/migrations` is kept as a single `init` that only creates tables. Before the first production deploy, squash any newer migrations back into `init` (regenerate it with `prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script` and keep the hand-written rules at the end), then everyone runs `make reset`. After go-live, every schema change is a new migration.

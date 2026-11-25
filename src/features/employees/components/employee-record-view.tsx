@@ -29,7 +29,7 @@ export function EmployeeRecordView({ id }: { id: string }) {
   if (q.error) return <ErrorState message={q.error} />;
   if (!q.data) return <><PageHeader title="Empleado no encontrado" backHref="/empleados" backLabel="Volver a empleados" /><EmptyState message="El expediente solicitado no existe." /></>;
   const { employee: e, documents, vacations, disabilities, advances } = q.data;
-  const canEdit = can("planilla.editar");
+  const canEdit = can("payroll.edit");
 
   return (
     <>
@@ -40,7 +40,7 @@ export function EmployeeRecordView({ id }: { id: string }) {
         backLabel="Volver a empleados"
         actions={
           <>
-            {can("planilla.infoSalarial") && <Button variant="secondary" icon="payments" href={`/empleados/${id}/salarial`}>Detalle salarial</Button>}
+            {can("payroll.salaries") && <Button variant="secondary" icon="payments" href={`/empleados/${id}/salarial`}>Detalle salarial</Button>}
             {canEdit && <Button variant="secondary" icon="edit" href={`/empleados/${id}/editar`}>Editar</Button>}
             {canEdit && (e.active ? <Button variant="danger" icon="person_off" onClick={() => setStatusModal("off")}>Inactivar</Button> : <Button icon="person_check" onClick={() => setStatusModal("on")}>Reactivar</Button>)}
           </>
@@ -48,7 +48,7 @@ export function EmployeeRecordView({ id }: { id: string }) {
       />
       <div className="mb-4 space-y-3">
         <DemoNotice />
-        {!can("planilla.infoSalarial") && <Alert tone="warning" title="Información salarial restringida">No tiene permiso para consultar salario, deducciones ni montos de adelantos. El expediente se muestra sin esa información.</Alert>}
+        {!can("payroll.salaries") && <Alert tone="warning" title="Información salarial restringida">No tiene permiso para consultar salario, deducciones ni montos de adelantos. El expediente se muestra sin esa información.</Alert>}
       </div>
 
       <Tabs<TabId> label="Secciones del expediente" value={tab} onChange={setTab} tabs={[
@@ -93,7 +93,7 @@ const Row = ({ l, v }: { l: string; v: React.ReactNode }) => (
 );
 function SalaryText({ text }: { text: string }) {
   const { can } = useSession();
-  return can("planilla.infoSalarial") ? <>{text}</> : <span className="text-xs text-slate-500">Restringido</span>;
+  return can("payroll.salaries") ? <>{text}</> : <span className="text-xs text-slate-500">Restringido</span>;
 }
 
 /** HU-29: inactivar (fecha y motivo, con confirmación) y reactivar (fecha de reingreso). */

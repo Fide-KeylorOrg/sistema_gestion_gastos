@@ -128,7 +128,7 @@ function DayModal({ date, events, onClose }: { date: string | null; events: Cale
                 <div className="mt-2 rounded bg-slate-50 p-2 text-sm"><p className="font-semibold text-slate-800">Feriado trabajado</p><ul>{e.workedHoliday.map((w, i) => <li key={i} className="text-slate-600">{w.employeeName} · planilla {w.payrollLabel}</li>)}</ul></div>
               )}
               {e.type === "FERIADO" && !e.workedHoliday?.length && <p className="mt-2 text-xs text-slate-500">Ningún colaborador lo tiene registrado como feriado trabajado.</p>}
-              {e.salaryDetail && (can("calendario.infoSalarial") ? <dl className="mt-2 space-y-1 text-sm">{e.salaryDetail.map((d) => <div key={d.label} className="flex justify-between"><dt className="text-slate-500">{d.label}</dt><dd className="font-medium text-slate-900">{d.value}</dd></div>)}</dl> : <p className="mt-2 text-xs text-slate-500">No tiene permiso para consultar los montos de remuneración.</p>)}
+              {e.salaryDetail && (can("payroll.salaries") ? <dl className="mt-2 space-y-1 text-sm">{e.salaryDetail.map((d) => <div key={d.label} className="flex justify-between"><dt className="text-slate-500">{d.label}</dt><dd className="font-medium text-slate-900">{d.value}</dd></div>)}</dl> : <p className="mt-2 text-xs text-slate-500">No tiene permiso para consultar los montos de remuneración.</p>)}
               {e.href && <Link href={e.href} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline">Ver registro en su módulo <Icon name="open_in_new" className="!text-base" /></Link>}
             </li>
           ))}
