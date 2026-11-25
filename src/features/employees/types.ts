@@ -69,11 +69,10 @@ export type VacationRecord = { id: string; employeeId: string; start: ISODate; e
 export type VacationInput = { start: ISODate; end: ISODate };
 
 /** PENDIENTE: el catálogo de tipos de incapacidad debe confirmarlo la administración. */
-export type DisabilityType = "ENFERMEDAD_CCSS" | "RIESGO_TRABAJO_INS" | "MATERNIDAD" | "OTRA";
+export type DisabilityType = "ENFERMEDAD_CCSS" | "RIESGO_TRABAJO_INS" | "OTRA";
 export const DISABILITY_TYPE_LABEL: Record<DisabilityType, string> = {
   ENFERMEDAD_CCSS: "Enfermedad (CCSS)",
   RIESGO_TRABAJO_INS: "Riesgo del trabajo (INS)",
-  MATERNIDAD: "Maternidad",
   OTRA: "Otra",
 };
 export type DisabilityRecord = { id: string; employeeId: string; start: ISODate; end: ISODate; type: DisabilityType; receipt?: Attachment; cancelled: boolean; payrollClosed: boolean };

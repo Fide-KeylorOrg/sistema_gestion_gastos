@@ -40,7 +40,7 @@ export function LiquidationView() {
   return (
     <>
       <PageHeader title="Cálculo de liquidación laboral" subtitle="Desglose y total correspondiente a la salida de un empleado." />
-      <div className="mb-4 space-y-3"><DemoNotice /><ServerPending>Las reglas de liquidación aún no están documentadas ni configuradas. El resultado que se muestra es un ejemplo ilustrativo con cifras fijas, no un cálculo real.</ServerPending></div>
+      <div className="mb-4 space-y-3"><DemoNotice /><ServerPending>El cálculo aplica las reglas del MTSS sobre datos de ejemplo (salario actual como constante, sin historial salarial real). Confirme con la administración la tabla de cesantía antes de usarlo en pagos.</ServerPending></div>
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Datos del expediente" className="lg:col-span-1 self-start">
           {employees.loading ? <Loading /> : (

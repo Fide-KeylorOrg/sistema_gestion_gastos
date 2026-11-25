@@ -1,5 +1,7 @@
 import { fail, ok } from "@/lib/result";
-import { addDays } from "@/lib/format";
+import { addDays, formatCRC } from "@/lib/format";
+import { hasCcssRates } from "@/lib/payroll-rates";
+import { monthsBetween, settlement, vacationDaysOnExit } from "@/lib/benefits";
 import type { PayrollService } from "../contracts";
 import { lineTotals, NOVELTY_MAX, NOVELTY_UNIT, type GlobalRate, type PayrollItem, type PayrollLine } from "@/features/payroll/types";
 import { validatePayrollPeriod, validateLiquidation, parseNoveltyForm } from "@/features/payroll/validation";
@@ -8,6 +10,12 @@ import { db, done, markRecalc, payrollLabel, uid } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const payOf = (id: string) => db.payrolls.find((p) => p.id === id);
+const LIQUIDATION_BASIS: Record<string, string> = {
+  Preaviso: "Despido con responsabilidad patronal",
+  "Cesantía": "Según antigüedad",
+  "Vacaciones proporcionales": "Días pendientes",
+  "Aguinaldo proporcional": "Devengado del período / 12",
+};
 const CLOSED_MSG = "La planilla está cerrada y no se puede modificar.";
 
 function sumLines(lines: PayrollLine[]) {
@@ -52,6 +60,7 @@ export const demoPayrollService: PayrollService = {
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     if (db.payrolls.some((p) => input.periodStart <= p.periodEnd && p.periodStart <= input.periodEnd))
       return fail("DUPLICATE", "El período ya tiene una planilla.", { periodStart: "Ya existe una planilla que cubre este período." });
+    if (!hasCcssRates(input.periodEnd)) return fail("VALIDATION", "No hay porcentajes de cargas sociales cargados para esa fecha.", { periodEnd: "Fecha sin porcentajes de cargas sociales." });
     // payDate: el formulario aún no tiene este campo; se usa el día siguiente al fin del período.
     const payroll = { id: uid("pay"), periodStart: input.periodStart, periodEnd: input.periodEnd, payDate: addDays(input.periodEnd, 1), status: "DRAFT" as const };
     db.payrolls.push(payroll);
@@ -223,19 +232,29 @@ export const demoPayrollService: PayrollService = {
     const hasHistory = db.workHistory.some((h) => h.employeeId === e.id && h.amount !== undefined);
     if (!hasHistory)
       return ok({ status: "MISSING_DATA" as const, missing: ["Historial salarial del empleado.", "Reglas de cálculo de liquidación configuradas por la administración."] });
-    // EJEMPLO ILUSTRATIVO con cifras fijas: la regla real de liquidación está pendiente de documentar.
-    const concepts = [
-      { concept: "Preaviso (ejemplo)", basis: "Según motivo de salida", days: 15, amount: 325000 },
-      { concept: "Cesantía (ejemplo)", basis: "Según antigüedad", days: 40, amount: 866000 },
-      { concept: "Vacaciones proporcionales (ejemplo)", basis: "Saldo de vacaciones", days: e.vacationBalanceDays, amount: 216000 },
-      { concept: "Aguinaldo proporcional (ejemplo)", basis: "Acumulado del período", days: null, amount: 245000 },
-    ];
+    // Datos de ejemplo: se supone el salario actual constante en todo el período (no hay historial salarial real).
+    const hourly = e.salaryBasis === "HOURLY";
+    const avgMonthly = hourly ? e.baseSalary * 96 * 2 : e.baseSalary; // 96 h por quincena, como la planilla de ejemplo
+    const monthsWorked = monthsBetween(e.hireDate, input.exitDate);
+    const [y, m] = input.exitDate.split("-").map(Number);
+    const periodStart = m === 12 ? `${y}-12-01` : `${y - 1}-12-01`; // el aguinaldo cuenta del 1 de dic al 30 de nov
+    const aguinaldoMonths = monthsBetween(e.hireDate > periodStart ? e.hireDate : periodStart, input.exitDate);
+    const concepts = settlement({
+      monthsWorked,
+      avgMonthly,
+      payment: hourly ? "HOURLY" : "MONTHLY",
+      dismissedWithLiability: input.exitReason === "DESPIDO_CON_RESPONSABILIDAD",
+      vacationDays: vacationDaysOnExit(monthsWorked, e.vacationBalanceDays),
+      aguinaldoEarnings: [avgMonthly * aguinaldoMonths],
+    }).map((c) => ({ ...c, basis: LIQUIDATION_BASIS[c.concept] }));
     return ok({
       status: "ILLUSTRATIVE" as const,
       usedData: [
         { label: "Fecha de ingreso", value: e.hireDate.split("-").reverse().join("/") },
         { label: "Fecha de salida", value: input.exitDate.split("-").reverse().join("/") },
         { label: "Saldo de vacaciones", value: `${e.vacationBalanceDays} días` },
+        { label: "Salario mensual usado", value: formatCRC(avgMonthly) },
+        { label: "Antigüedad", value: `${monthsWorked.toFixed(1)} meses` },
         { label: "Fecha de consulta", value: DEMO_TODAY.split("-").reverse().join("/") },
       ],
       concepts,

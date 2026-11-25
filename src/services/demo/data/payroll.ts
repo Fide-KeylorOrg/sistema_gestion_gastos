@@ -1,6 +1,8 @@
 import type { Employee } from "@/features/employees/types";
 import type { GlobalRate, Novelty, Payroll, PayrollItem, PayrollLine } from "@/features/payroll/types";
 import { fullName } from "@/features/employees/types";
+import { ccssRatesOn, employeeCharges, employerCharges, incomeTaxTableOn } from "@/lib/payroll-rates";
+import { DEMO_TODAY } from "../clock";
 
 export const demoPayrolls = (): Payroll[] => [
   { id: "pay-1", periodStart: "2026-08-01", periodEnd: "2026-08-15", payDate: "2026-08-16", status: "CLOSED", closedAt: "2026-08-16T09:00:00-06:00", paidAt: "2026-08-16" },
@@ -29,7 +31,7 @@ const it = (kind: PayrollItem["kind"], code: string, description: string, amount
  * DATOS DE EJEMPLO. Los porcentajes usados aquí NO son reglas del sistema: son cifras ilustrativas para poblar
  * la interfaz. Los montos reales los calculará el backend con las reglas aprobadas (pendientes de documentar).
  */
-export function buildDemoLine(emp: Employee, payrollId: string): PayrollLine {
+export function buildDemoLine(emp: Employee, payrollId: string, periodEnd: string): PayrollLine {
   const items: PayrollItem[] = [];
   const base = emp.salaryBasis === "MONTHLY" ? emp.baseSalary / 2 : emp.baseSalary * 96;
   items.push(it("EARNING", "ORDINARY", "Salario ordinario", base, emp.salaryBasis === "HOURLY" ? 96 : undefined));
@@ -37,15 +39,15 @@ export function buildDemoLine(emp: Employee, payrollId: string): PayrollLine {
   const hourly = emp.salaryBasis === "MONTHLY" ? emp.baseSalary / 240 : emp.baseSalary;
   if (ot) items.push(it("EARNING", "OVERTIME", "Horas extra", Math.round(ot * hourly * 1.5), ot));
   const gross = items.reduce((a, i) => a + i.amount, 0);
-  items.push(it("DEDUCTION", "CCSS_EMPLOYEE", "Cuota obrera CCSS (ejemplo)", Math.round(gross * 0.1067)));
-  items.push(it("EMPLOYER_CONTRIBUTION", "CCSS_EMPLOYER", "Cargas patronales CCSS (ejemplo)", Math.round(gross * 0.2667)));
+  items.push(it("DEDUCTION", "CCSS_EMPLOYEE", "Cuota obrera CCSS (ejemplo)", Math.round(employeeCharges(gross, periodEnd).total)));
+  items.push(it("EMPLOYER_CONTRIBUTION", "CCSS_EMPLOYER", "Cargas patronales CCSS (ejemplo)", Math.round(employerCharges(gross, periodEnd))));
   return { employeeId: emp.id, employeeName: fullName(emp), idNumber: emp.idNumber, position: emp.position, items, recalcPending: false };
 }
 
 export function buildDemoLines(employees: Employee[], payroll: Payroll): PayrollLine[] {
   return employees
     .filter((e) => e.hireDate <= payroll.periodEnd && (e.active || (e.statusChangedAt ?? "") >= payroll.periodStart))
-    .map((e) => buildDemoLine(e, payroll.id));
+    .map((e) => buildDemoLine(e, payroll.id, payroll.periodEnd));
 }
 
 export const demoNovelties = (): Novelty[] => [
@@ -56,18 +58,28 @@ export const demoNovelties = (): Novelty[] => [
   { id: "nov-5", payrollId: "pay-2", employeeId: "emp-1", employeeName: "Carlos Mora Jiménez", date: "2026-08-31", type: "FERIADO_TRABAJADO", quantity: 1, cancelled: false },
 ];
 
-/** Parámetros de ejemplo, NO oficiales. Los valores vigentes los define la administración (HU-22). */
-export const demoRates = (): GlobalRate[] => [
-  { id: "rate-1", concept: "Seguro de Enfermedad y Maternidad (SEM)", institution: "CCSS", scope: "OBRERO", valueType: "PERCENT", value: 5.5, effectiveFrom: "2026-01-01", locked: false },
-  { id: "rate-2", concept: "Invalidez, Vejez y Muerte (IVM)", institution: "CCSS", scope: "OBRERO", valueType: "PERCENT", value: 4.17, effectiveFrom: "2026-01-01", locked: false },
-  { id: "rate-3", concept: "Aporte Banco Popular", institution: "Banco Popular", scope: "OBRERO", valueType: "PERCENT", value: 1, effectiveFrom: "2026-01-01", locked: true, lockReason: "Porcentaje fijado por ley; solo puede cambiar con una reforma legal." },
-  { id: "rate-4", concept: "Cuota patronal CCSS (SEM + IVM)", institution: "CCSS", scope: "PATRONAL", valueType: "PERCENT", value: 14.67, effectiveFrom: "2026-01-01", locked: false },
-  { id: "rate-5", concept: "Póliza de riesgos del trabajo", institution: "INS", scope: "PATRONAL", valueType: "PERCENT", value: 1.5, effectiveFrom: "2026-01-01", locked: false },
+/** Porcentajes de la CCSS y tramos de Hacienda vigentes hoy (src/lib/payroll-rates.ts). Esta pantalla no alimenta los cálculos. */
+export const demoRates = (): GlobalRate[] => {
+  const { employee: ee, employer: er, from } = ccssRatesOn(DEMO_TODAY);
+  const tax = incomeTaxTableOn(DEMO_TODAY);
+  return [
+  { id: "rate-1", concept: "Seguro de Enfermedad y Maternidad (SEM)", institution: "CCSS", scope: "OBRERO", valueType: "PERCENT", value: ee.SEM, effectiveFrom: from, locked: false },
+  { id: "rate-2", concept: "Invalidez, Vejez y Muerte (IVM)", institution: "CCSS", scope: "OBRERO", valueType: "PERCENT", value: ee.IVM, effectiveFrom: from, locked: false },
+  { id: "rate-3", concept: "Aporte Banco Popular", institution: "Banco Popular", scope: "OBRERO", valueType: "PERCENT", value: ee.BANCO_POPULAR, effectiveFrom: from, locked: true, lockReason: "Porcentaje fijado por ley; solo puede cambiar con una reforma legal." },
+  { id: "rate-4", concept: "Cuota patronal CCSS (SEM + IVM)", institution: "CCSS", scope: "PATRONAL", valueType: "PERCENT", value: Number((er.SEM + er.IVM).toFixed(2)), effectiveFrom: from, locked: false },
+  { id: "rate-5", concept: "Póliza de riesgos del trabajo (tasa de referencia)", institution: "INS", scope: "PATRONAL", valueType: "PERCENT", value: er.INS, effectiveFrom: from, locked: false },
+  { id: "rate-7", concept: "Asignaciones Familiares (FODESAF)", institution: "CCSS", scope: "PATRONAL", valueType: "PERCENT", value: er.ASIGNACIONES_FAMILIARES, effectiveFrom: from, locked: false },
+  { id: "rate-8", concept: "IMAS", institution: "IMAS", scope: "PATRONAL", valueType: "PERCENT", value: er.IMAS, effectiveFrom: from, locked: false },
+  { id: "rate-9", concept: "INA", institution: "INA", scope: "PATRONAL", valueType: "PERCENT", value: er.INA, effectiveFrom: from, locked: false },
+  { id: "rate-10", concept: "Banco Popular (cuota patronal 0,25 % + aporte LPT 0,25 %)", institution: "Banco Popular", scope: "PATRONAL", valueType: "PERCENT", value: er.BANCO_POPULAR, effectiveFrom: from, locked: false },
+  { id: "rate-11", concept: "Fondo de Capitalización Laboral (FCL)", institution: "Ley de Protección al Trabajador", scope: "PATRONAL", valueType: "PERCENT", value: er.FCL, effectiveFrom: from, locked: false },
+  { id: "rate-12", concept: "Fondo de pensiones complementarias (OPC)", institution: "Ley de Protección al Trabajador", scope: "PATRONAL", valueType: "PERCENT", value: er.OPC, effectiveFrom: from, locked: false },
   {
-    id: "rate-6", concept: "Impuesto sobre la renta (rebajo por rango de salario)", institution: "Ministerio de Hacienda", scope: "OBRERO", valueType: "RANGES", value: null, effectiveFrom: "2026-01-01", locked: false,
-    ranges: [{ from: 0, to: 918000, percent: 0 }, { from: 918000, to: 1347000, percent: 10 }, { from: 1347000, to: null, percent: 15 }],
+    id: "rate-6", concept: "Impuesto sobre la renta (rebajo por rango de salario)", institution: "Ministerio de Hacienda", scope: "OBRERO", valueType: "RANGES", value: null, effectiveFrom: tax.from, locked: false,
+    ranges: tax.brackets,
   },
-];
+  ];
+};
 
 /** Feriados de ejemplo (la lista oficial la mantendrá el backend). */
 export const demoHolidays = (): { date: string; name: string }[] => [
