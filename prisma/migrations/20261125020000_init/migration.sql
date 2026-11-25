@@ -23,6 +23,9 @@ CREATE TYPE "TimeEntryKind" AS ENUM ('OVERTIME', 'UNPAID_LEAVE');
 CREATE TYPE "RateScope" AS ENUM ('EMPLOYEE', 'EMPLOYER');
 
 -- CreateEnum
+CREATE TYPE "RateCode" AS ENUM ('SEM', 'IVM', 'BANCO_POPULAR', 'ASIGNACIONES_FAMILIARES', 'IMAS', 'INA', 'FCL', 'OPC', 'INS');
+
+-- CreateEnum
 CREATE TYPE "PayrollItemKind" AS ENUM ('EARNING', 'DEDUCTION', 'EMPLOYER_CONTRIBUTION');
 
 -- CreateEnum
@@ -40,6 +43,8 @@ CREATE TABLE "User" (
     "passwordHash" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "mustChangePassword" BOOLEAN NOT NULL DEFAULT true,
+    "tempPasswordExpiresAt" TIMESTAMPTZ(3),
+    "passwordChangedAt" TIMESTAMPTZ(3),
     "roleId" UUID NOT NULL,
     "lastLoginAt" TIMESTAMPTZ(3),
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,8 +80,10 @@ CREATE TABLE "AuditLog" (
     "at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "actorId" UUID,
     "action" TEXT NOT NULL,
-    "target" TEXT,
+    "entityType" TEXT,
+    "entityId" TEXT,
     "detail" JSONB,
+    "sensitive" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
@@ -112,14 +119,23 @@ CREATE TABLE "Employee" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "statusChangedAt" DATE,
     "statusReason" TEXT,
-    "salaryBasis" "SalaryBasis" NOT NULL,
-    "baseSalary" DECIMAL(14,2) NOT NULL,
-    "salaryEffectiveFrom" DATE NOT NULL,
     "openingVacationDays" DECIMAL(5,1) NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
     CONSTRAINT "Employee_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmployeeSalary" (
+    "id" UUID NOT NULL,
+    "employeeId" UUID NOT NULL,
+    "salaryBasis" "SalaryBasis" NOT NULL,
+    "baseSalary" DECIMAL(14,2) NOT NULL,
+    "effectiveFrom" DATE NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmployeeSalary_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -196,7 +212,7 @@ CREATE TABLE "Holiday" (
 CREATE TABLE "PayrollRate" (
     "id" UUID NOT NULL,
     "scope" "RateScope" NOT NULL,
-    "code" TEXT NOT NULL,
+    "code" "RateCode" NOT NULL,
     "percent" DECIMAL(6,3) NOT NULL,
     "effectiveFrom" DATE NOT NULL,
     "effectiveTo" DATE NOT NULL,
@@ -307,6 +323,7 @@ CREATE TABLE "ExpenseDue" (
     "dueDate" DATE NOT NULL,
     "estimatedAmount" DECIMAL(14,2) NOT NULL,
     "generatedByPaymentId" UUID,
+    "cancelledAt" TIMESTAMPTZ(3),
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMPTZ(3) NOT NULL,
 
@@ -340,8 +357,11 @@ CREATE TABLE "NotificationRecipient" (
 CREATE TABLE "NotificationLog" (
     "id" BIGSERIAL NOT NULL,
     "dueId" UUID NOT NULL,
-    "sentAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notifyOn" DATE NOT NULL,
     "recipients" TEXT[],
+    "sentAt" TIMESTAMPTZ(3),
+    "error" TEXT,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "NotificationLog_pkey" PRIMARY KEY ("id")
 );
@@ -365,10 +385,19 @@ CREATE INDEX "AuditLog_at_idx" ON "AuditLog"("at");
 CREATE INDEX "AuditLog_actorId_idx" ON "AuditLog"("actorId");
 
 -- CreateIndex
+CREATE INDEX "AuditLog_action_idx" ON "AuditLog"("action");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_entityType_entityId_at_idx" ON "AuditLog"("entityType", "entityId", "at");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "StoredFile_storageKey_key" ON "StoredFile"("storageKey");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Employee_idType_idNumber_key" ON "Employee"("idType", "idNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmployeeSalary_employeeId_effectiveFrom_key" ON "EmployeeSalary"("employeeId", "effectiveFrom");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EmployeeDocument_fileId_key" ON "EmployeeDocument"("fileId");
@@ -446,7 +475,7 @@ CREATE INDEX "ExpensePayment_dueId_idx" ON "ExpensePayment"("dueId");
 CREATE UNIQUE INDEX "NotificationRecipient_email_key" ON "NotificationRecipient"("email");
 
 -- CreateIndex
-CREATE INDEX "NotificationLog_dueId_idx" ON "NotificationLog"("dueId");
+CREATE UNIQUE INDEX "NotificationLog_dueId_notifyOn_key" ON "NotificationLog"("dueId", "notifyOn");
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -459,6 +488,9 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("acto
 
 -- AddForeignKey
 ALTER TABLE "StoredFile" ADD CONSTRAINT "StoredFile_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeSalary" ADD CONSTRAINT "EmployeeSalary_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EmployeeDocument" ADD CONSTRAINT "EmployeeDocument_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -534,7 +566,11 @@ CREATE TRIGGER audit_log_append_only
   BEFORE UPDATE OR DELETE ON "AuditLog"
   FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
 
-ALTER TABLE "Employee" ADD CONSTRAINT "Employee_baseSalary_positive" CHECK ("baseSalary" > 0);
+ALTER TABLE "EmployeeSalary" ADD CONSTRAINT "EmployeeSalary_baseSalary_positive" CHECK ("baseSalary" > 0);
+-- An inactive employee keeps the date and reason of the change (HU-25).
+ALTER TABLE "Employee" ADD CONSTRAINT "Employee_inactive_has_status" CHECK ("active" OR ("statusChangedAt" IS NOT NULL AND "statusReason" IS NOT NULL));
+-- A temporary password always forces a change at first login (HU-3, HU-11).
+ALTER TABLE "User" ADD CONSTRAINT "User_temp_password_requires_change" CHECK ("tempPasswordExpiresAt" IS NULL OR "mustChangePassword");
 
 ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_period_valid" CHECK ("periodEnd" >= "periodStart");
 ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_no_overlap"
@@ -573,7 +609,7 @@ ALTER TABLE "SalaryAdvance" ADD CONSTRAINT "SalaryAdvance_amount_positive" CHECK
 ALTER TABLE "StoredFile" ADD CONSTRAINT "StoredFile_size_limit" CHECK ("sizeBytes" BETWEEN 1 AND 10485760);
 
 -- Versioned rates (HU-19): one row per component and period, with no overlaps.
-ALTER TABLE "PayrollRate" ADD CONSTRAINT "PayrollRate_valid" CHECK ("percent" >= 0 AND "effectiveTo" >= "effectiveFrom");
+ALTER TABLE "PayrollRate" ADD CONSTRAINT "PayrollRate_valid" CHECK ("percent" BETWEEN 0 AND 100 AND "effectiveTo" >= "effectiveFrom");
 ALTER TABLE "PayrollRate" ADD CONSTRAINT "PayrollRate_no_overlap"
   EXCLUDE USING gist ("scope" WITH =, "code" WITH =, daterange("effectiveFrom", "effectiveTo", '[]') WITH &&);
 ALTER TABLE "IncomeTaxTable" ADD CONSTRAINT "IncomeTaxTable_period_valid" CHECK ("effectiveTo" >= "effectiveFrom");
@@ -581,3 +617,6 @@ ALTER TABLE "IncomeTaxTable" ADD CONSTRAINT "IncomeTaxTable_no_overlap"
   EXCLUDE USING gist (daterange("effectiveFrom", "effectiveTo", '[]') WITH &&);
 ALTER TABLE "IncomeTaxBracket" ADD CONSTRAINT "IncomeTaxBracket_valid"
   CHECK ("lowerBound" >= 0 AND ("upperBound" IS NULL OR "upperBound" > "lowerBound") AND "percent" BETWEEN 0 AND 100);
+-- Brackets of one table never overlap; a null upper bound means no limit (HU-19).
+ALTER TABLE "IncomeTaxBracket" ADD CONSTRAINT "IncomeTaxBracket_no_overlap"
+  EXCLUDE USING gist ("tableId" WITH =, numrange("lowerBound", "upperBound", '[)') WITH &&);

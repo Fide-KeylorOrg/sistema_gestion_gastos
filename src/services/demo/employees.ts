@@ -1,9 +1,9 @@
 import { fail, ok } from "@/lib/result";
 import { formatDate } from "@/lib/format";
 import type { EmployeesService } from "../contracts";
-import { fullName, type Employee } from "@/features/employees/types";
+import { fullName, type EmployeeEntity } from "@/features/employees/types";
 import { parseEmployeeForm, validateDateRange } from "@/features/employees/validation";
-import { countDaysPlaceholder, db, done, employeeHistory, markRecalc, nowISO, payrollLabel, uid } from "./store";
+import { countDaysPlaceholder, db, done, employeeHistory, markRecalc, nowISO, payrollLabel, setSalary, uid, withSalary } from "./store";
 import { DEMO_ACTOR, DEMO_TODAY } from "./clock";
 
 const empOf = (id: string) => db.employees.find((e) => e.id === id);
@@ -29,7 +29,8 @@ export const demoEmployeesService: EmployeesService = {
       .filter((e) => !q || fullName(e).toLowerCase().includes(q) || e.idNumber.toLowerCase().includes(q))
       .filter((e) => !f.active || f.active === "all" || (f.active === "active") === e.active)
       .filter((e) => !f.position || e.position === f.position)
-      .sort((a, b) => fullName(a).localeCompare(fullName(b)));
+      .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+      .map((e) => withSalary(e));
   },
   async positions() {
     return [...new Set(db.employees.map((e) => e.position))].sort();
@@ -38,7 +39,7 @@ export const demoEmployeesService: EmployeesService = {
     const employee = empOf(id);
     if (!employee) return null;
     return {
-      employee: { ...employee },
+      employee: withSalary(employee),
       documents: db.documents.filter((d) => d.employeeId === id),
       vacations: db.vacations.filter((v) => v.employeeId === id).sort((a, b) => b.start.localeCompare(a.start)),
       disabilities: db.disabilities.filter((v) => v.employeeId === id).sort((a, b) => b.start.localeCompare(a.start)),
@@ -50,11 +51,13 @@ export const demoEmployeesService: EmployeesService = {
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     const dup = db.employees.find((e) => e.idType === input.idType && e.idNumber === input.idNumber);
     if (dup) return fail("DUPLICATE", `El empleado ya existe (estado actual: ${dup.active ? "Activo" : "Inactivo"}).`, { idNumber: `Ya existe un empleado con esta identificación (${dup.active ? "activo" : "inactivo"}).` });
-    const emp: Employee = { ...input, id: uid("emp"), active: true, vacationBalanceDays: 0, salaryEffectiveFrom: input.hireDate };
+    const { salaryBasis, baseSalary, ...data } = input;
+    const emp: EmployeeEntity = { ...data, id: uid("emp"), active: true, vacationBalanceDays: 0 };
     db.employees.push(emp);
+    setSalary(emp.id, { salaryBasis, baseSalary, effectiveFrom: input.hireDate });
     employeeHistory(emp.id, input.hireDate, "INGRESO", `Ingreso como ${input.position}.`, input.baseSalary);
     done();
-    return ok(emp);
+    return ok(withSalary(emp));
   },
   async update(id, input) {
     const emp = empOf(id);
@@ -63,12 +66,15 @@ export const demoEmployeesService: EmployeesService = {
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     if (db.employees.some((e) => e.id !== id && e.idType === input.idType && e.idNumber === input.idNumber))
       return fail("DUPLICATE", "Esta identificación ya pertenece a otro empleado.", { idNumber: "Esta identificación ya pertenece a otro empleado." });
-    const changedSalary = input.baseSalary !== emp.baseSalary;
-    Object.assign(emp, input);
+    const current = withSalary(emp);
+    const { salaryBasis, baseSalary, ...data } = input;
+    const changedSalary = baseSalary !== current.baseSalary || salaryBasis !== current.salaryBasis;
+    Object.assign(emp, data);
+    if (changedSalary) setSalary(id, { salaryBasis, baseSalary, effectiveFrom: DEMO_TODAY });
     employeeHistory(id, DEMO_TODAY, "EDICION", "Se actualizaron datos personales o laborales.");
     if (changedSalary) employeeHistory(id, DEMO_TODAY, "CAMBIO_SALARIAL", "Cambio de salario base.", input.baseSalary);
     done();
-    return ok(emp);
+    return ok(withSalary(emp));
   },
   async deactivate(id, input) {
     const emp = empOf(id);

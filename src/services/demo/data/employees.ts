@@ -1,12 +1,23 @@
-import type { DisabilityRecord, Employee, EmployeeDocument, SalaryAdvance, VacationRecord, WorkHistoryEntry } from "@/features/employees/types";
+import type { DisabilityRecord, Employee, EmployeeDocument, EmployeeEntity, EmployeeSalary, SalaryAdvance, VacationRecord, WorkHistoryEntry } from "@/features/employees/types";
 
-const E = (id: string, first: string, l1: string, l2: string, idNumber: string, position: string, hire: string, salary: number, extra: Partial<Employee> = {}): Employee => ({
+/** Semilla: el empleado más su salario de ingreso, que se separan en Employee y EmployeeSalary. */
+type Seed = EmployeeEntity & Pick<Employee, "salaryBasis" | "baseSalary">;
+
+const E = (id: string, first: string, l1: string, l2: string, idNumber: string, position: string, hire: string, salary: number, extra: Partial<Seed> = {}): Seed => ({
   id, idType: "NATIONAL_ID", idNumber, firstName: first, lastName1: l1, lastName2: l2, birthDate: "1990-05-14", email: `${first.split(" ")[0].toLowerCase()}.${l1.toLowerCase()}@correo.cr`,
   phone: "8800-" + id.slice(-1).repeat(4), address: "Heredia, San Francisco", position, hireDate: hire, active: true, salaryBasis: "MONTHLY", baseSalary: salary,
-  vacationBalanceDays: 8, salaryEffectiveFrom: hire, ...extra,
+  vacationBalanceDays: 8, ...extra,
 });
 
-export const demoEmployees = (): Employee[] => [
+export const demoEmployees = (): EmployeeEntity[] => SEEDS.map(({ salaryBasis, baseSalary, ...e }) => e);
+
+export const demoSalaries = (): EmployeeSalary[] => [
+  ...SEEDS.map((s) => ({ id: `sal-${s.id}`, employeeId: s.id, salaryBasis: s.salaryBasis, baseSalary: s.baseSalary, effectiveFrom: s.hireDate })),
+  // Aumento de Carlos desde septiembre: las planillas de agosto usan el salario anterior.
+  { id: "sal-emp-1-b", employeeId: "emp-1", salaryBasis: "MONTHLY", baseSalary: 680000, effectiveFrom: "2026-09-01" },
+];
+
+const SEEDS: Seed[] = [
   E("emp-1", "Carlos", "Mora", "Jiménez", "1-1234-0567", "Carnicero", "2021-03-01", 650000, { vacationBalanceDays: 12, contractEndsOn: "2026-12-15", birthDate: "1985-02-11" }),
   E("emp-2", "María Fernanda", "Solís", "Vargas", "2-0654-0321", "Cajera", "2022-06-15", 520000, { vacationBalanceDays: 6 }),
   E("emp-3", "José Pablo", "Rojas", "Araya", "1-1450-0782", "Encargado de ferretería", "2020-01-10", 700000, { vacationBalanceDays: 15, contractEndsOn: "2027-01-31" }),

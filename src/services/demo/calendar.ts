@@ -4,7 +4,7 @@ import type { CalendarEvent } from "@/features/calendar/types";
 import { DISABILITY_TYPE_LABEL, fullName } from "@/features/employees/types";
 import { dueStatus, isDueSoon } from "@/features/expenses/status";
 import { lineTotals } from "@/features/payroll/types";
-import { activePayment, db, payrollLabel } from "./store";
+import { activePayment, db, liveDues, payrollLabel } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const eachDay = (start: string, end: string) => {
@@ -51,7 +51,7 @@ export const demoCalendarService: CalendarService = {
       events.push({ id: `fer-${h.date}`, date: h.date, type: "FERIADO", title: h.name, subtitle: worked.length ? `Feriado trabajado (${worked.length})` : "Feriado", detail: [{ label: "Feriado", value: h.name }, { label: "Fecha", value: formatDate(h.date) }], workedHoliday: worked, href: worked.length ? "/planilla/novedades" : undefined });
     }
 
-    for (const due of db.dues.filter((d) => inMonth(d.dueDate))) {
+    for (const due of liveDues().filter((d) => inMonth(d.dueDate))) {
       const e = db.expenses.find((x) => x.id === due.expenseId && !x.deletedAt);
       if (!e) continue;
       const payment = activePayment(due.id);

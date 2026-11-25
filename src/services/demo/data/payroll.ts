@@ -1,6 +1,6 @@
-import type { Employee } from "@/features/employees/types";
+import type { EmployeeEntity, EmployeeSalary } from "@/features/employees/types";
 import type { GlobalRate, Novelty, Payroll, PayrollItem, PayrollLine } from "@/features/payroll/types";
-import { fullName } from "@/features/employees/types";
+import { fullName, salaryOn } from "@/features/employees/types";
 import { ccssRatesOn, employeeCharges, employerCharges, incomeTaxTableOn } from "@/lib/payroll-rates";
 import { DEMO_TODAY } from "../clock";
 
@@ -31,12 +31,12 @@ const it = (kind: PayrollItem["kind"], code: string, description: string, amount
  * DATOS DE EJEMPLO. Los porcentajes usados aquí NO son reglas del sistema: son cifras ilustrativas para poblar
  * la interfaz. Los montos reales los calculará el backend con las reglas aprobadas (pendientes de documentar).
  */
-export function buildDemoLine(emp: Employee, payrollId: string, periodEnd: string): PayrollLine {
+export function buildDemoLine(emp: EmployeeEntity, salary: EmployeeSalary, payrollId: string, periodEnd: string): PayrollLine {
   const items: PayrollItem[] = [];
-  const base = emp.salaryBasis === "MONTHLY" ? emp.baseSalary / 2 : emp.baseSalary * 96;
-  items.push(it("EARNING", "ORDINARY", "Salario ordinario", base, emp.salaryBasis === "HOURLY" ? 96 : undefined));
+  const base = salary.salaryBasis === "MONTHLY" ? salary.baseSalary / 2 : salary.baseSalary * 96;
+  items.push(it("EARNING", "ORDINARY", "Salario ordinario", base, salary.salaryBasis === "HOURLY" ? 96 : undefined));
   const ot = OVERTIME_BY_PERIOD[payrollId]?.[emp.id] ?? 0;
-  const hourly = emp.salaryBasis === "MONTHLY" ? emp.baseSalary / 240 : emp.baseSalary;
+  const hourly = salary.salaryBasis === "MONTHLY" ? salary.baseSalary / 240 : salary.baseSalary;
   if (ot) items.push(it("EARNING", "OVERTIME", "Horas extra", Math.round(ot * hourly * 1.5), ot));
   const gross = items.reduce((a, i) => a + i.amount, 0);
   items.push(it("DEDUCTION", "CCSS_EMPLOYEE", "Cuota obrera CCSS (ejemplo)", Math.round(employeeCharges(gross, periodEnd).total)));
@@ -44,10 +44,14 @@ export function buildDemoLine(emp: Employee, payrollId: string, periodEnd: strin
   return { employeeId: emp.id, employeeName: fullName(emp), idNumber: emp.idNumber, position: emp.position, items, recalcPending: false };
 }
 
-export function buildDemoLines(employees: Employee[], payroll: Payroll): PayrollLine[] {
+/** Cada línea usa el salario que regía al inicio del período (HU-18). */
+export function buildDemoLines(employees: EmployeeEntity[], salaries: EmployeeSalary[], payroll: Payroll): PayrollLine[] {
   return employees
     .filter((e) => e.hireDate <= payroll.periodEnd && (e.active || (e.statusChangedAt ?? "") >= payroll.periodStart))
-    .map((e) => buildDemoLine(e, payroll.id, payroll.periodEnd));
+    .flatMap((e) => {
+      const salary = salaryOn(salaries, e.id, payroll.periodStart) ?? salaryOn(salaries, e.id, payroll.periodEnd);
+      return salary ? [buildDemoLine(e, salary, payroll.id, payroll.periodEnd)] : [];
+    });
 }
 
 export const demoNovelties = (): Novelty[] => [

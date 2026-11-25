@@ -4,7 +4,7 @@ import type { DueRow } from "@/features/expenses/types";
 import { dueStatus, DUE_SOON_DAYS } from "@/features/expenses/status";
 import { lineTotals } from "@/features/payroll/types";
 import type { ExpenseComparison, PeriodRef, UpcomingItem } from "@/features/dashboard/types";
-import { activePayment, db } from "./store";
+import { activePayment, db, liveDues } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const rowOf = (due: (typeof db.dues)[number]): DueRow | null => {
@@ -21,7 +21,7 @@ export const demoDashboardService: DashboardService = {
   async summary() {
     const active = db.employees.filter((e) => e.active).length;
     const lastChange = db.employees.filter((e) => e.statusChangedAt).sort((a, b) => b.statusChangedAt!.localeCompare(a.statusChangedAt!))[0];
-    const rows = db.dues.map(rowOf).filter((r): r is DueRow => !!r);
+    const rows = liveDues().map(rowOf).filter((r): r is DueRow => !!r);
     const horizon = addDays(DEMO_TODAY, DUE_SOON_DAYS);
     const upcoming: UpcomingItem[] = rows
       .filter((r) => !r.payment && r.due.dueDate >= DEMO_TODAY && r.due.dueDate <= horizon)
@@ -47,7 +47,7 @@ export const demoDashboardService: DashboardService = {
   async compareExpenses(mode, a, b) {
     const calc = (p: PeriodRef) => {
       const map = new Map<string, number>();
-      for (const d of db.dues) {
+      for (const d of liveDues()) {
         const e = db.expenses.find((x) => x.id === d.expenseId && !x.deletedAt);
         if (!e || !inPeriod(d.dueDate, mode, p)) continue;
         const cat = db.categories.find((c) => c.id === e.categoryId)?.name ?? "—";
@@ -78,7 +78,7 @@ export const demoDashboardService: DashboardService = {
   },
 
   async availablePeriods() {
-    const years = [...new Set([...db.dues.map((d) => +d.dueDate.slice(0, 4)), ...db.payrolls.map((p) => +p.periodStart.slice(0, 4))])].sort();
+    const years = [...new Set([...liveDues().map((d) => +d.dueDate.slice(0, 4)), ...db.payrolls.map((p) => +p.periodStart.slice(0, 4))])].sort();
     return { years };
   },
 };

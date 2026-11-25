@@ -9,21 +9,24 @@ datasource db {
 
 // Usernames and emails are stored lowercased by the app, so @unique is case-insensitive in practice.
 model User {
-  id                 String       @id @default(uuid(7)) @db.Uuid
-  fullName           String
-  username           String       @unique
-  email              String       @unique
-  passwordHash       String
-  active             Boolean      @default(true)
-  mustChangePassword Boolean      @default(true)
-  roleId             String       @db.Uuid
-  role               Role         @relation(fields: [roleId], references: [id])
-  lastLoginAt        DateTime?    @db.Timestamptz(3)
-  createdAt          DateTime     @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime     @updatedAt @db.Timestamptz(3)
-  sessions           Session[]
-  auditLogs          AuditLog[]
-  uploadedFiles      StoredFile[]
+  id                    String       @id @default(uuid(7)) @db.Uuid
+  fullName              String
+  username              String       @unique
+  email                 String       @unique
+  passwordHash          String
+  active                Boolean      @default(true)
+  mustChangePassword    Boolean      @default(true)
+  // Set with a temporary password (new user or reset): it stops working 48 h later (HU-11).
+  tempPasswordExpiresAt DateTime?    @db.Timestamptz(3)
+  passwordChangedAt     DateTime?    @db.Timestamptz(3)
+  roleId                String       @db.Uuid
+  role                  Role         @relation(fields: [roleId], references: [id])
+  lastLoginAt           DateTime?    @db.Timestamptz(3)
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @db.Timestamptz(3)
+  sessions              Session[]
+  auditLogs             AuditLog[]
+  uploadedFiles         StoredFile[]
 }
 
 // permissions holds keys from PERMISSIONS in src/lib/permissions.ts; the app validates them on write.
@@ -47,18 +50,23 @@ model Session {
   @@index([userId])
 }
 
-// Append-only: a trigger in the init migration rejects UPDATE and DELETE.
+// Append-only: a trigger in the init migration rejects UPDATE and DELETE. Kept at least 24 months (HU-12).
+// Also the history of users (HU-5) and employees (HU-26): filter by entityType + entityId.
 model AuditLog {
-  id      BigInt   @id @default(autoincrement())
-  at      DateTime @default(now()) @db.Timestamptz(3)
-  actorId String?  @db.Uuid
-  actor   User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  action  String
-  target  String?
-  detail  Json?
+  id         BigInt   @id @default(autoincrement())
+  at         DateTime @default(now()) @db.Timestamptz(3)
+  actorId    String?  @db.Uuid
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action     String
+  entityType String? // e.g. "User", "Role", "Employee"
+  entityId   String?
+  detail     Json?
+  sensitive  Boolean  @default(false) // detail holds salary data: only shown with payroll.salaries
 
   @@index([at])
   @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId, at])
 }
 
 // Uploaded files (stored in S3). Each file belongs to exactly one record, which points to it.
@@ -92,8 +100,8 @@ enum SalaryBasis {
   HOURLY
 }
 
-// Current terms only. Past values live in the AuditLog and in each PayrollLine snapshot.
 // Everyone works the jornada diurna (8 h a day, 48 h a week, Código de Trabajo art. 136): hours beyond it are overtime.
+// Inactive requires the date and reason of the change (CHECK in the init migration).
 model Employee {
   id                  String             @id @default(uuid(7)) @db.Uuid
   idType              IdType
@@ -111,13 +119,11 @@ model Employee {
   active              Boolean            @default(true)
   statusChangedAt     DateTime?          @db.Date
   statusReason        String?
-  salaryBasis         SalaryBasis
-  baseSalary          Decimal            @db.Decimal(14, 2)
-  salaryEffectiveFrom DateTime           @db.Date // first payroll date the current salary applies to (HU-18)
   // Vacation days carried over when an existing employee is loaded; the balance is this + accrued - taken.
   openingVacationDays Decimal            @default(0) @db.Decimal(5, 1)
   createdAt           DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  salaries            EmployeeSalary[]
   payrollLines        PayrollLine[]
   timeEntries         TimeEntry[]
   leaves              Leave[]
@@ -125,6 +131,20 @@ model Employee {
   documents           EmployeeDocument[]
 
   @@unique([idType, idNumber])
+}
+
+// Salary terms by effective date (HU-18): each row applies from effectiveFrom until the next row starts, so a
+// change can be scheduled ahead. The salary for a payroll is the latest row with effectiveFrom <= periodStart.
+model EmployeeSalary {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  employeeId    String      @db.Uuid
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+  salaryBasis   SalaryBasis
+  baseSalary    Decimal     @db.Decimal(14, 2)
+  effectiveFrom DateTime    @db.Date
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@unique([employeeId, effectiveFrom])
 }
 
 enum DocumentType {
@@ -237,12 +257,25 @@ enum RateScope {
   EMPLOYER // paid by the employer on top of it
 }
 
+// Social-charge components (CCSS, Banco Popular, INS...). A new one needs calculation code too, so an enum is fine.
+enum RateCode {
+  SEM
+  IVM
+  BANCO_POPULAR
+  ASIGNACIONES_FAMILIARES
+  IMAS
+  INA
+  FCL
+  OPC
+  INS
+}
+
 // CCSS and related social charges, one row per component and validity period (HU-19). A change adds a row
-// starting on its effective date; old rows are never edited, so past payrolls keep their rates.
+// starting on its effective date; an old row only ever has its effectiveTo shortened, so past payrolls keep their rates.
 model PayrollRate {
   id            String    @id @default(uuid(7)) @db.Uuid
   scope         RateScope
-  code          String // SEM, IVM, BANCO_POPULAR, ASIGNACIONES_FAMILIARES, IMAS, INA, FCL, OPC, INS
+  code          RateCode
   percent       Decimal   @db.Decimal(6, 3)
   effectiveFrom DateTime  @db.Date
   effectiveTo   DateTime  @db.Date
@@ -383,9 +416,11 @@ model ExpenseDue {
   expense              Expense           @relation(fields: [expenseId], references: [id])
   dueDate              DateTime          @db.Date
   estimatedAmount      Decimal           @db.Decimal(14, 2) // copied from Expense, so later edits don't rewrite history
-  // Set when paying the previous due created this one; voiding that payment removes it if still untouched (HU-39).
+  // Set when paying the previous due created this one. Voiding that payment cancels this due if still untouched
+  // (HU-39); paying again reactivates it (clears cancelledAt), so there is still one due per period.
   generatedByPaymentId String?           @unique @db.Uuid
   generatedByPayment   ExpensePayment?   @relation("GeneratedDue", fields: [generatedByPaymentId], references: [id])
+  cancelledAt          DateTime?         @db.Timestamptz(3) // cancelled dues are ignored by status, alerts, calendar and dashboard
   createdAt            DateTime          @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime          @updatedAt @db.Timestamptz(3)
   payments             ExpensePayment[]  @relation("DuePayments")
@@ -419,12 +454,17 @@ model NotificationRecipient {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 }
 
+// One row per due and notice date, claimed before sending, so a reminder is never sent twice (HU-37).
+// sentAt stays null until the email goes out; error holds the last failure for a retry.
 model NotificationLog {
   id         BigInt     @id @default(autoincrement())
   dueId      String     @db.Uuid
   due        ExpenseDue @relation(fields: [dueId], references: [id])
-  sentAt     DateTime   @default(now()) @db.Timestamptz(3)
+  notifyOn   DateTime   @db.Date
   recipients String[]
+  sentAt     DateTime?  @db.Timestamptz(3)
+  error      String?
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
 
-  @@index([dueId])
+  @@unique([dueId, notifyOn])
 }

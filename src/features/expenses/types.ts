@@ -43,6 +43,8 @@ export type ExpenseDue = {
   estimatedAmount: number;
   /** Pago que generó este vencimiento; al anularlo se retira el vencimiento si nadie lo tocó (HU-39). */
   generatedByPaymentId?: string;
+  /** Cancelado al anular el pago que lo generó o al finalizar la recurrencia; no aparece en ninguna vista. */
+  cancelledAt?: string;
   createdAt: string;
   updatedAt: string;
 };

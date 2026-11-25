@@ -6,7 +6,7 @@ import type { DueRow, Expense, ExpenseDue } from "@/features/expenses/types";
 import { dueStatus } from "@/features/expenses/status";
 import { nextDueDate } from "@/features/expenses/recurrence";
 import { parseExpenseForm, validateCategory, validateVoidReason } from "@/features/expenses/validation";
-import { activePayment, db, done, expenseHistory, nowISO, uid } from "./store";
+import { activePayment, db, done, expenseHistory, liveDues, nowISO, uid } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const expenseOf = (id: string) => db.expenses.find((e) => e.id === id && !e.deletedAt);
@@ -19,12 +19,12 @@ function toRow(due: ExpenseDue): DueRow | null {
   return { due, payment, expense, categoryName: categoryName(expense.categoryId), status: dueStatus(due.dueDate, !!payment, DEMO_TODAY), daysToDue: diffDays(DEMO_TODAY, due.dueDate) };
 }
 
-const openDueOf = (expenseId: string) => db.dues.filter((d) => d.expenseId === expenseId && !activePayment(d.id)).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+const openDueOf = (expenseId: string) => liveDues().filter((d) => d.expenseId === expenseId && !activePayment(d.id)).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
 
 export const demoExpensesService: ExpensesService = {
   async listDues(f) {
     const q = f.search?.trim().toLowerCase();
-    const rows = db.dues.map(toRow).filter((r): r is DueRow => !!r);
+    const rows = liveDues().map(toRow).filter((r): r is DueRow => !!r);
     return rows
       .filter((r) => (f.tab === "active" ? !r.payment : !!r.payment))
       .filter((r) => !q || r.expense.concept.toLowerCase().includes(q) || (r.expense.referenceNumber ?? "").toLowerCase().includes(q))
@@ -37,7 +37,7 @@ export const demoExpensesService: ExpensesService = {
   },
 
   async getDue(dueId) {
-    const due = db.dues.find((d) => d.id === dueId);
+    const due = liveDues().find((d) => d.id === dueId);
     const row = due && toRow(due);
     if (!row) return null;
     const history = db.expenseHistory.filter((h) => h.expenseId === row.expense.id).sort((a, b) => b.at.localeCompare(a.at));
@@ -49,7 +49,7 @@ export const demoExpensesService: ExpensesService = {
   async getExpense(expenseId) {
     const e = expenseOf(expenseId);
     if (!e) return null;
-    const due = openDueOf(expenseId) ?? db.dues.filter((d) => d.expenseId === expenseId).sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+    const due = openDueOf(expenseId) ?? liveDues().filter((d) => d.expenseId === expenseId).sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
     return { expense: { ...e, dueDate: due.dueDate }, dueId: due.id };
   },
 
@@ -60,7 +60,7 @@ export const demoExpensesService: ExpensesService = {
       recurrenceEndsOn: input.recurrenceEndsOn ?? "", notify: input.notifyDaysBefore !== null, notifyDays: String(input.notifyDaysBefore ?? ""), recipients: input.extraRecipients.join(","),
     });
     if (form.errors && Object.keys(form.errors).length) return fail("VALIDATION", "Revise los campos indicados.", form.errors);
-    if (db.expenses.some((e) => !e.deletedAt && e.concept.toLowerCase() === input.concept.trim().toLowerCase() && db.dues.some((d) => d.expenseId === e.id && d.dueDate === input.dueDate)))
+    if (db.expenses.some((e) => !e.deletedAt && e.concept.toLowerCase() === input.concept.trim().toLowerCase() && liveDues().some((d) => d.expenseId === e.id && d.dueDate === input.dueDate)))
       return fail("DUPLICATE", "Ya existe un gasto con el mismo concepto y fecha de vencimiento.", { concept: "Ya existe un gasto con este concepto y vencimiento." });
     const expense: Expense = { ...input, id: uid("e"), concept: input.concept.trim() };
     db.expenses.push(expense);
@@ -85,7 +85,7 @@ export const demoExpensesService: ExpensesService = {
     }
     expenseHistory(expenseId, "Edición", "Se actualizaron los datos del gasto.");
     done();
-    return ok({ dueId: (open ?? db.dues.find((d) => d.expenseId === expenseId)!).id });
+    return ok({ dueId: (open ?? liveDues().find((d) => d.expenseId === expenseId)!).id });
   },
 
   async remove(expenseId) {
@@ -97,7 +97,7 @@ export const demoExpensesService: ExpensesService = {
   },
 
   async markPaid(dueId, input) {
-    const due = db.dues.find((d) => d.id === dueId);
+    const due = liveDues().find((d) => d.id === dueId);
     const e = due && expenseOf(due.expenseId);
     if (!due || !e) return fail("NOT_FOUND", "El gasto no existe.");
     if (activePayment(due.id)) return fail("CONFLICT", "Este vencimiento ya está pagado.");
@@ -108,28 +108,35 @@ export const demoExpensesService: ExpensesService = {
     expenseHistory(e.id, "Pago registrado", `Pagado ${formatCRC(input.paidAmount)} (estimado ${formatCRC(due.estimatedAmount)}).`);
     let nextDueId: string | undefined;
     const next = nextDueDate(due.dueDate, e.recurrence);
-    if (next && (!e.recurrenceEndsOn || next <= e.recurrenceEndsOn) && !db.dues.some((d) => d.expenseId === e.id && d.dueDate === next)) {
-      const nd: ExpenseDue = { id: uid("due"), expenseId: e.id, dueDate: next, estimatedAmount: e.estimatedAmount, generatedByPaymentId: payment.id, createdAt: nowISO(), updatedAt: nowISO() };
-      db.dues.push(nd);
-      nextDueId = nd.id;
+    if (next && (!e.recurrenceEndsOn || next <= e.recurrenceEndsOn)) {
+      const existing = db.dues.find((d) => d.expenseId === e.id && d.dueDate === next);
+      if (existing?.cancelledAt) {
+        // Volver a pagar tras una anulación reactiva el mismo vencimiento: sigue habiendo uno por período (HU-38, HU-39).
+        Object.assign(existing, { cancelledAt: undefined, generatedByPaymentId: payment.id });
+        nextDueId = existing.id;
+      } else if (!existing) {
+        const nd: ExpenseDue = { id: uid("due"), expenseId: e.id, dueDate: next, estimatedAmount: e.estimatedAmount, generatedByPaymentId: payment.id, createdAt: nowISO(), updatedAt: nowISO() };
+        db.dues.push(nd);
+        nextDueId = nd.id;
+      }
     }
     done();
     return ok({ nextDueId });
   },
 
   async voidPayment(dueId, reason) {
-    const due = db.dues.find((d) => d.id === dueId);
+    const due = liveDues().find((d) => d.id === dueId);
     const e = due && expenseOf(due.expenseId);
     if (!due || !e) return fail("NOT_FOUND", "El gasto no existe.");
     const errors = validateVoidReason(reason);
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     const payment = activePayment(due.id);
     if (!payment) return fail("CONFLICT", "Este vencimiento no tiene un pago vigente.");
-    // El vencimiento que generó este pago se retira, salvo que ya se haya pagado o modificado (HU-39 escenarios 2 y 3).
-    const generated = db.dues.find((d) => d.generatedByPaymentId === payment.id);
+    // El vencimiento que generó este pago se cancela, salvo que ya se haya pagado o modificado (HU-39 escenarios 2 y 3).
+    const generated = liveDues().find((d) => d.generatedByPaymentId === payment.id);
     if (generated && (activePayment(generated.id) || generated.updatedAt !== generated.createdAt))
       return fail("CONFLICT", `El siguiente vencimiento (${generated.dueDate.split("-").reverse().join("/")}) ya fue pagado o modificado; no se puede anular este pago.`);
-    if (generated) db.dues = db.dues.filter((d) => d.id !== generated.id);
+    if (generated) generated.cancelledAt = nowISO();
     payment.voidedAt = nowISO();
     payment.voidReason = reason.trim();
     expenseHistory(e.id, "Pago anulado", `Motivo: ${payment.voidReason}. Pago de ${formatCRC(payment.amount)} del ${payment.paidAt.split("-").reverse().join("/")}.`);
@@ -142,8 +149,8 @@ export const demoExpensesService: ExpensesService = {
     if (!e) return fail("NOT_FOUND", "El gasto no existe.");
     if (!isValidDate(endsOn)) return fail("VALIDATION", "Fecha inválida.");
     e.recurrenceEndsOn = endsOn;
-    // Se conservan los vencimientos pendientes anteriores a la fecha de fin; los posteriores sin pagar se retiran.
-    db.dues = db.dues.filter((d) => !(d.expenseId === expenseId && !activePayment(d.id) && d.dueDate > endsOn));
+    // Se conservan los vencimientos anteriores a la fecha de fin; los posteriores sin pagar se cancelan (HU-44).
+    for (const d of liveDues().filter((x) => x.expenseId === expenseId && !activePayment(x.id) && x.dueDate > endsOn)) d.cancelledAt = nowISO();
     expenseHistory(expenseId, "Recurrencia finalizada", `No se generarán vencimientos después del ${endsOn.split("-").reverse().join("/")}.`);
     done();
     return ok(undefined);

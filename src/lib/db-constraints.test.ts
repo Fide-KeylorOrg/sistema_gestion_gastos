@@ -25,10 +25,7 @@ test("payroll periods cannot overlap or end before they start, and only closed p
 
 test("an employee's active vacations and sick leaves never overlap, and only sick leave has a sick-leave type", async () => {
   const employee = await db.employee.create({
-    data: {
-      idType: "NATIONAL_ID", idNumber: randomUUID(), firstName: "Ana", lastName1: "Mora", birthDate: day("1990-05-01"), position: "Cajera",
-      hireDate: day("2025-01-06"), salaryBasis: "MONTHLY", baseSalary: 450000, salaryEffectiveFrom: day("2025-01-06"),
-    },
+    data: { idType: "NATIONAL_ID", idNumber: randomUUID(), firstName: "Ana", lastName1: "Mora", birthDate: day("1990-05-01"), position: "Cajera", hireDate: day("2025-01-06") },
   });
   const leave = (kind: "VACATION" | "SICK_LEAVE", start: string, end: string, extra = {}) =>
     db.leave.create({ data: { employeeId: employee.id, kind, startDate: day(start), endDate: day(end), days: 3, ...extra } });
@@ -45,16 +42,41 @@ test("an employee's active vacations and sick leaves never overlap, and only sic
   }
 });
 
-test("a rate component can't have two overlapping validity periods", async () => {
-  const code = `TEST_${randomUUID()}`;
-  const rate = (from: string, to: string) =>
-    db.payrollRate.create({ data: { scope: "EMPLOYER", code, percent: 1, effectiveFrom: day(from), effectiveTo: day(to), source: "test" } });
+test("an inactive employee needs the date and reason; salaries are positive and one per effective date", async () => {
+  const employee = await db.employee.create({
+    data: { idType: "NATIONAL_ID", idNumber: randomUUID(), firstName: "Luis", lastName1: "Soto", birthDate: day("1992-01-01"), position: "Cajero", hireDate: day("2025-01-06") },
+  });
+  const salary = (from: string, baseSalary: number) => db.employeeSalary.create({ data: { employeeId: employee.id, salaryBasis: "MONTHLY", baseSalary, effectiveFrom: day(from) } });
   try {
-    await rate("2031-01-01", "2031-12-31");
-    await assert.rejects(rate("2031-06-01", "2032-12-31"));
-    await rate("2032-01-01", "2032-12-31");
+    await assert.rejects(db.employee.update({ where: { id: employee.id }, data: { active: false } }));
+    await db.employee.update({ where: { id: employee.id }, data: { active: false, statusChangedAt: day("2026-03-31"), statusReason: "Renuncia" } });
+    await salary("2025-01-06", 450000);
+    await salary("2026-07-01", 480000); // scheduled ahead (HU-18)
+    await assert.rejects(salary("2026-07-01", 490000));
+    await assert.rejects(salary("2026-08-01", 0));
   } finally {
-    await db.payrollRate.deleteMany({ where: { code } });
+    await db.employeeSalary.deleteMany({ where: { employeeId: employee.id } });
+    await db.employee.delete({ where: { id: employee.id } });
+  }
+});
+
+test("rates stay within 0-100% with no overlapping periods, and income-tax brackets don't overlap", async () => {
+  const rate = (from: string, to: string, percent = 1) =>
+    db.payrollRate.create({ data: { scope: "EMPLOYER", code: "INS", percent, effectiveFrom: day(from), effectiveTo: day(to), source: "test" } });
+  const table = await db.incomeTaxTable.create({ data: { effectiveFrom: day("2091-01-01"), effectiveTo: day("2091-12-31"), source: "test" } });
+  const bracket = (lowerBound: number, upperBound: number | null) => db.incomeTaxBracket.create({ data: { tableId: table.id, lowerBound, upperBound, percent: 10 } });
+  try {
+    await rate("2091-01-01", "2091-12-31");
+    await assert.rejects(rate("2091-06-01", "2092-12-31"));
+    await assert.rejects(rate("2093-01-01", "2093-12-31", 101));
+    await rate("2092-01-01", "2092-12-31");
+
+    await bracket(0, 900000);
+    await bracket(900000, null); // touching bounds are fine: [0, 900000) and [900000, ∞)
+    await assert.rejects(bracket(500000, 1000000));
+  } finally {
+    await db.payrollRate.deleteMany({ where: { code: "INS", effectiveFrom: { gte: day("2091-01-01") } } });
+    await db.incomeTaxTable.delete({ where: { id: table.id } });
   }
 });
 

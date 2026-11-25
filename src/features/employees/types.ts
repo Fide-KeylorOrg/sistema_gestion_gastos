@@ -24,15 +24,26 @@ export type Employee = {
   active: boolean;
   statusChangedAt?: ISODate;
   statusReason?: string;
+  /** Salario vigente hoy: el servicio lo toma de EmployeeSalary (salaryOn), no se guarda en el empleado. */
   salaryBasis: SalaryBasis;
   baseSalary: number;
   /** Vencimiento del contrato (HU-48). */
   contractEndsOn?: ISODate;
   /** SOLO INTERFAZ: el saldo de vacaciones lo calcula el backend (HU-17, 27). */
   vacationBalanceDays: number;
-  /** Vigencia de los datos salariales vigentes (HU-18). */
+  /** Desde cuándo rige el salario vigente (HU-18). */
   salaryEffectiveFrom: ISODate;
 };
+
+/** Igual que el modelo Employee de Prisma: el salario vive aparte, en EmployeeSalary. */
+export type EmployeeEntity = Omit<Employee, "salaryBasis" | "baseSalary" | "salaryEffectiveFrom">;
+
+/** Igual que el modelo EmployeeSalary de Prisma: cada fila rige desde effectiveFrom hasta que empieza la siguiente. */
+export type EmployeeSalary = { id: string; employeeId: string; salaryBasis: SalaryBasis; baseSalary: number; effectiveFrom: ISODate };
+
+/** Salario que rige en `date`: la fila más reciente con effectiveFrom <= date (HU-18). */
+export const salaryOn = (salaries: EmployeeSalary[], employeeId: string, date: ISODate): EmployeeSalary | undefined =>
+  salaries.filter((s) => s.employeeId === employeeId && s.effectiveFrom <= date).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
 
 export const fullName = (e: Pick<Employee, "firstName" | "lastName1" | "lastName2">) =>
   [e.firstName, e.lastName1, e.lastName2].filter(Boolean).join(" ");

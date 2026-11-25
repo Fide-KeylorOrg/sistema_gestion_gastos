@@ -2,6 +2,7 @@ import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/password";
 import { PERMISSIONS, type Permission } from "../src/lib/permissions";
 import { CCSS_RATES, INCOME_TAX } from "../src/lib/payroll-rates";
+import type { RateCode } from "../src/generated/prisma/client";
 
 // Roles are fixed (no role editor in the user stories); the admin only assigns one per user.
 const ROLES: Record<string, Permission[]> = {
@@ -48,8 +49,8 @@ async function seedRates() {
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
   for (const entry of CCSS_RATES) {
     const rows = [
-      ...Object.entries(entry.employee).map(([code, percent]) => ({ scope: "EMPLOYEE" as const, code, percent })),
-      ...Object.entries(entry.employer).map(([code, percent]) => ({ scope: "EMPLOYER" as const, code, percent })),
+      ...Object.entries(entry.employee).map(([code, percent]) => ({ scope: "EMPLOYEE" as const, code: code as RateCode, percent })),
+      ...Object.entries(entry.employer).map(([code, percent]) => ({ scope: "EMPLOYER" as const, code: code as RateCode, percent })),
     ];
     for (const { scope, code, percent } of rows) {
       const data = { percent, effectiveTo: day(entry.to), source: entry.source };

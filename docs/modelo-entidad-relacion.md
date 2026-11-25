@@ -27,6 +27,8 @@ erDiagram
     string passwordHash
     boolean active
     boolean mustChangePassword
+    datetime tempPasswordExpiresAt "vence 48 h después"
+    datetime passwordChangedAt
     uuid roleId FK
     datetime lastLoginAt
     datetime createdAt
@@ -43,8 +45,10 @@ erDiagram
     datetime at
     uuid actorId FK
     string action
-    string target
+    string entityType
+    string entityId
     json detail
+    boolean sensitive "contiene datos salariales"
   }
   StoredFile {
     uuid id PK
@@ -57,6 +61,7 @@ erDiagram
   }
 
   %% ---------- Empleados y planilla ----------
+  Employee ||--|{ EmployeeSalary : "cobra según"
   Employee ||--o{ EmployeeDocument : "tiene"
   EmployeeDocument ||--|| StoredFile : "archivo"
   EmployeeDocument |o--o| EmployeeDocument : "reemplaza"
@@ -88,12 +93,17 @@ erDiagram
     boolean active
     date statusChangedAt
     string statusReason
-    enum salaryBasis "MONTHLY, HOURLY"
-    decimal baseSalary
-    date salaryEffectiveFrom
     decimal openingVacationDays
     datetime createdAt
     datetime updatedAt
+  }
+  EmployeeSalary {
+    uuid id PK
+    uuid employeeId FK
+    enum salaryBasis "MONTHLY, HOURLY"
+    decimal baseSalary
+    date effectiveFrom "UK junto con employeeId"
+    datetime createdAt
   }
   EmployeeDocument {
     uuid id PK
@@ -170,7 +180,7 @@ erDiagram
   PayrollRate {
     uuid id PK
     enum scope "EMPLOYEE, EMPLOYER"
-    string code
+    enum code "SEM, IVM, BANCO_POPULAR, ASIGNACIONES_FAMILIARES, IMAS, INA, FCL, OPC, INS"
     decimal percent
     date effectiveFrom
     date effectiveTo
@@ -237,6 +247,7 @@ erDiagram
     date dueDate "UK junto con expenseId"
     decimal estimatedAmount
     uuid generatedByPaymentId FK "UK"
+    datetime cancelledAt
     datetime createdAt
     datetime updatedAt
   }
@@ -258,8 +269,11 @@ erDiagram
   NotificationLog {
     bigint id PK
     uuid dueId FK
-    datetime sentAt
+    date notifyOn "UK junto con dueId"
     string_array recipients
+    datetime sentAt
+    string error
+    datetime createdAt
   }
 ```
 
@@ -267,14 +281,15 @@ erDiagram
 
 **Estados calculados, no guardados** (así no pueden contradecir los datos de los que dependen, riesgo R07):
 - Empleado activo o inactivo: `Employee.active`, con fecha y motivo del último cambio.
-- Vencimiento pagado, vencido o pendiente: pagado si tiene un `ExpensePayment` sin anular; vencido si `dueDate` ya pasó; si no, pendiente.
+- Vencimiento pagado, vencido o pendiente: pagado si tiene un `ExpensePayment` sin anular; vencido si `dueDate` ya pasó; si no, pendiente. Los vencimientos con `cancelledAt` (generados por un pago que luego se anuló) no cuentan; si se vuelve a pagar, se reactiva el mismo vencimiento.
 - Planilla en borrador o cerrada: cerrada si tiene `closedAt`.
 - Adelanto pendiente, descontado o anulado: anulado si tiene `voidedAt`; descontado si su planilla está cerrada.
+- Salario vigente: la fila de `EmployeeSalary` con la mayor `effectiveFrom` que no sea posterior al inicio del período. Permite programar cambios a futuro (HU-18).
 - Saldo de vacaciones: `openingVacationDays` + días acumulados − días tomados.
 - Bruto, deducciones y neto de planilla: sumas de `PayrollItem` por tipo.
 
 **Historial sin tablas adicionales:**
-- El historial laboral (HU-26) y los cambios de usuarios (HU-5) se leen de `AuditLog`.
+- El historial laboral (HU-26) y los cambios de usuarios (HU-5) se leen de `AuditLog`, filtrando por `entityType` y `entityId`. Las filas con `sensitive` solo se muestran con permiso de información salarial. La bitácora se conserva al menos 24 meses (HU-12).
 - Lo anulado se marca con `voidedAt` y no se borra: pagos, adelantos, novedades e incapacidades.
 - Las versiones de documentos se encadenan con `replacesId`.
 
@@ -285,10 +300,13 @@ erDiagram
 - Un vencimiento tiene a lo sumo un pago vigente.
 - Solo se paga una planilla cerrada.
 - Montos, horas y días deben ser positivos.
-- Los avisos se configuran de 1 a 10 días.
+- Los avisos se configuran de 1 a 10 días, y cada aviso (vencimiento + fecha de aviso) se registra una sola vez, así no se envía dos veces.
+- Un empleado inactivo tiene fecha y motivo del cambio.
+- Una contraseña temporal siempre exige cambiarla en el primer inicio de sesión.
+- Los porcentajes de las tarifas van de 0 a 100 y los tramos de renta de una tabla no se traslapan.
 - Los archivos pesan como máximo 10 MB.
 - La bitácora (`AuditLog`) no admite cambios ni borrados.
 
-**Tarifas con vigencia** (HU-19, riesgo R12): `PayrollRate` guarda cada componente de las cargas sociales con su período de vigencia y su fuente; `IncomeTaxTable` guarda los tramos de renta por año. Un cambio agrega filas nuevas y nunca modifica las anteriores, de modo que las planillas pasadas conservan sus tarifas. Las planillas cerradas además guardan una copia del salario usado (`PayrollLine`) y el desglose de montos (`PayrollItem`).
+**Tarifas con vigencia** (HU-19, riesgo R12): `PayrollRate` guarda cada componente de las cargas sociales con su período de vigencia y su fuente; `IncomeTaxTable` guarda los tramos de renta por año. Un cambio agrega filas nuevas; de una fila anterior solo se acorta `effectiveTo`, de modo que las planillas pasadas conservan sus tarifas. Las planillas cerradas además guardan una copia del salario usado (`PayrollLine`) y el desglose de montos (`PayrollItem`).
 
 **Fuera del modelo** (se calculan, no se guardan): liquidación, aguinaldo, dashboard y calendario.

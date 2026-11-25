@@ -35,6 +35,10 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     await audit("login.failure", { actorId: user.id, detail: { username, reason: "inactive" } });
     return { username, error: "La cuenta no tiene acceso al sistema. Comuníquese con el administrador." };
   }
+  if (user.tempPasswordExpiresAt && user.tempPasswordExpiresAt <= new Date()) {
+    await audit("login.failure", { actorId: user.id, detail: { username, reason: "temp_password_expired" } });
+    return { username, error: "La contraseña temporal venció. Solicite al administrador un nuevo restablecimiento." };
+  }
 
   await startSession(user.id);
   await db.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

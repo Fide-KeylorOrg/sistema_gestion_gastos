@@ -6,7 +6,7 @@ import type { PayrollService } from "../contracts";
 import { lineTotals, NOVELTY_MAX, NOVELTY_UNIT, type GlobalRate, type PayrollItem, type PayrollLine } from "@/features/payroll/types";
 import { validatePayrollPeriod, validateLiquidation, parseNoveltyForm } from "@/features/payroll/validation";
 import { buildDemoLines } from "./data/payroll";
-import { db, done, markRecalc, payrollLabel, uid } from "./store";
+import { db, done, markRecalc, payrollLabel, setSalary, uid, withSalary } from "./store";
 import { DEMO_TODAY } from "./clock";
 
 const payOf = (id: string) => db.payrolls.find((p) => p.id === id);
@@ -65,7 +65,7 @@ export const demoPayrollService: PayrollService = {
     const payroll = { id: uid("pay"), periodStart: input.periodStart, periodEnd: input.periodEnd, payDate: addDays(input.periodEnd, 1), status: "DRAFT" as const };
     db.payrolls.push(payroll);
     // El backend real calculará ingresos, deducciones y neto. Aquí se generan líneas de EJEMPLO.
-    db.lines[payroll.id] = buildDemoLines(db.employees, payroll);
+    db.lines[payroll.id] = buildDemoLines(db.employees, db.salaries, payroll);
     done();
     return ok(payroll);
   },
@@ -169,8 +169,9 @@ export const demoPayrollService: PayrollService = {
   },
 
   async salaryView(employeeId, payrollId) {
-    const e = db.employees.find((x) => x.id === employeeId);
-    if (!e) return null;
+    const entity = db.employees.find((x) => x.id === employeeId);
+    if (!entity) return null;
+    const e = withSalary(entity);
     const movements = db.payrolls
       .filter((p) => db.lines[p.id]?.some((l) => l.employeeId === employeeId))
       .sort((a, b) => b.periodStart.localeCompare(a.periodStart))
@@ -194,7 +195,9 @@ export const demoPayrollService: PayrollService = {
     const e = db.employees.find((x) => x.id === employeeId);
     if (!e) return fail("NOT_FOUND", "El empleado no existe.");
     if (!(input.baseSalary > 0)) return fail("VALIDATION", "Revise los campos indicados.");
-    Object.assign(e, { salaryBasis: input.salaryBasis, baseSalary: input.baseSalary, salaryEffectiveFrom: input.effectiveFrom });
+    setSalary(employeeId, { salaryBasis: input.salaryBasis, baseSalary: input.baseSalary, effectiveFrom: input.effectiveFrom });
+    // Solo cambian las planillas en borrador cuyo período empieza desde la vigencia (HU-18).
+    for (const p of db.payrolls.filter((x) => x.status === "DRAFT" && x.periodStart >= input.effectiveFrom)) markRecalc(p.id, employeeId);
     db.workHistory.unshift({ id: uid("wh"), employeeId, date: input.effectiveFrom, type: "CAMBIO_SALARIAL", detail: "Datos salariales actualizados.", actorName: "Damaris Salas", amount: input.baseSalary });
     // Las planillas cerradas conservan su instantánea (PayrollLine): no se tocan (HU-21 esc. 3).
     done();
@@ -224,14 +227,15 @@ export const demoPayrollService: PayrollService = {
   },
 
   async calculateLiquidation(input) {
-    const e = db.employees.find((x) => x.id === input.employeeId);
+    const entity = db.employees.find((x) => x.id === input.employeeId);
+    const e = entity && withSalary(entity, input.exitDate || DEMO_TODAY);
     const errors = validateLiquidation(input, e?.hireDate);
     if (Object.keys(errors).length) return fail("VALIDATION", "Revise los campos indicados.", errors);
     if (!e) return fail("NOT_FOUND", "El empleado no existe.");
     const hasHistory = db.workHistory.some((h) => h.employeeId === e.id && h.amount !== undefined);
     if (!hasHistory)
       return ok({ status: "MISSING_DATA" as const, missing: ["Historial salarial del empleado.", "Reglas de cálculo de liquidación configuradas por la administración."] });
-    // Datos de ejemplo: se supone el salario actual constante en todo el período (no hay historial salarial real).
+    // Datos de ejemplo: se supone constante el salario vigente a la fecha de salida (el backend promediará lo pagado).
     const hourly = e.salaryBasis === "HOURLY";
     const avgMonthly = hourly ? e.baseSalary * 96 * 2 : e.baseSalary; // 96 h por quincena, como la planilla de ejemplo
     const monthsWorked = monthsBetween(e.hireDate, input.exitDate);

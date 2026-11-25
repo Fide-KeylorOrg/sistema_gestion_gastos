@@ -5,13 +5,13 @@
 import { notifyDataChanged } from "../invalidation";
 import type { AuditAction, AuditEntry, Role, User, UserChange } from "@/features/users/types";
 import type { Expense, ExpenseCategory, ExpenseDue, ExpenseHistoryEntry, ExpensePayment, NotificationSettings } from "@/features/expenses/types";
-import type { DisabilityRecord, Employee, EmployeeDocument, SalaryAdvance, VacationRecord, WorkHistoryEntry } from "@/features/employees/types";
+import { salaryOn, type DisabilityRecord, type Employee, type EmployeeDocument, type EmployeeEntity, type EmployeeSalary, type SalaryAdvance, type VacationRecord, type WorkHistoryEntry } from "@/features/employees/types";
 import type { GlobalRate, Novelty, Payroll, PayrollLine } from "@/features/payroll/types";
 import { demoAudit, demoRoles, demoUserChanges, demoUsers } from "./data/users";
 import { demoCategories, demoDues, demoExpenseHistory, demoExpenses, demoPayments } from "./data/expenses";
-import { demoAdvances, demoDisabilities, demoDocuments, demoEmployees, demoVacations, demoWorkHistory } from "./data/employees";
+import { demoAdvances, demoDisabilities, demoDocuments, demoEmployees, demoSalaries, demoVacations, demoWorkHistory } from "./data/employees";
 import { buildDemoLines, demoHolidays, demoNovelties, demoPayrolls, demoRates } from "./data/payroll";
-import { DEMO_ACTOR } from "./clock";
+import { DEMO_ACTOR, DEMO_TODAY } from "./clock";
 
 type State = {
   roles: Role[];
@@ -24,7 +24,8 @@ type State = {
   payments: ExpensePayment[];
   expenseHistory: ExpenseHistoryEntry[];
   notification: NotificationSettings;
-  employees: Employee[];
+  employees: EmployeeEntity[];
+  salaries: EmployeeSalary[];
   workHistory: WorkHistoryEntry[];
   vacations: VacationRecord[];
   disabilities: DisabilityRecord[];
@@ -41,14 +42,15 @@ type State = {
 
 function seed(): State {
   const employees = demoEmployees();
+  const salaries = demoSalaries();
   const payrolls = demoPayrolls();
   const lines: Record<string, PayrollLine[]> = {};
-  for (const p of payrolls) lines[p.id] = buildDemoLines(employees, p);
+  for (const p of payrolls) lines[p.id] = buildDemoLines(employees, salaries, p);
   return {
     roles: demoRoles(), users: demoUsers(), userChanges: demoUserChanges(), audit: demoAudit(),
     categories: demoCategories(), expenses: demoExpenses(), dues: demoDues(), payments: demoPayments(), expenseHistory: demoExpenseHistory(),
     notification: { globalRecipients: ["damaris.salas@losangeles.cr"] },
-    employees, workHistory: demoWorkHistory(), vacations: demoVacations(), disabilities: demoDisabilities(), documents: demoDocuments(), advances: demoAdvances(),
+    employees, salaries, workHistory: demoWorkHistory(), vacations: demoVacations(), disabilities: demoDisabilities(), documents: demoDocuments(), advances: demoAdvances(),
     payrolls, lines, novelties: demoNovelties(), rates: demoRates(), holidays: demoHolidays(),
     demoPassword: "demo-clave-actual-12",
   };
@@ -81,6 +83,22 @@ export function markRecalc(payrollId: string, employeeId: string) {
 }
 
 export const done = notifyDataChanged;
+
+/** Vencimientos sin cancelar. Un vencimiento cancelado (HU-39, HU-44) se conserva pero no aparece en ninguna vista. */
+export const liveDues = () => db.dues.filter((d) => !d.cancelledAt);
+
+/** Empleado con su salario vigente en `date`, como lo entregaría el backend (el salario vive en EmployeeSalary). */
+/** Registra el salario que rige desde `effectiveFrom`; una fila por fecha, como en la base de datos. */
+export function setSalary(employeeId: string, s: Pick<EmployeeSalary, "salaryBasis" | "baseSalary" | "effectiveFrom">) {
+  db.salaries = db.salaries.filter((x) => !(x.employeeId === employeeId && x.effectiveFrom === s.effectiveFrom));
+  db.salaries.push({ id: uid("sal"), employeeId, ...s });
+}
+
+export function withSalary(e: EmployeeEntity, date = DEMO_TODAY): Employee {
+  const s = salaryOn(db.salaries, e.id, date) ?? db.salaries.filter((x) => x.employeeId === e.id).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
+  if (!s) throw new Error(`El empleado ${e.id} no tiene salario registrado.`);
+  return { ...e, salaryBasis: s.salaryBasis, baseSalary: s.baseSalary, salaryEffectiveFrom: s.effectiveFrom };
+}
 
 /** Pago vigente (no anulado) de un vencimiento. */
 export const activePayment = (dueId: string) => db.payments.find((p) => p.dueId === dueId && !p.voidedAt);

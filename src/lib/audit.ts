@@ -5,7 +5,7 @@ export type AuditAction = "login.success" | "login.failure" | "logout" | "logout
 
 export async function audit(
   action: AuditAction,
-  entry: { actorId?: string; target?: string; detail?: Prisma.InputJsonValue } = {},
+  entry: { actorId?: string; entityType?: string; entityId?: string; detail?: Prisma.InputJsonValue; sensitive?: boolean } = {},
 ): Promise<void> {
   await db.auditLog.create({ data: { action, ...entry } });
 }
