@@ -9,7 +9,8 @@ const ROLES: Record<string, Permission[]> = {
   Gastos: ["dashboard.view", "expenses.view", "expenses.edit", "calendar.view"],
 };
 
-// Idempotent: re-running keeps the existing admin and only syncs the roles' permissions.
+// Idempotent for dev: re-running syncs the roles' permissions and resets the admin's email and password to the SEED_* values.
+// shortcut: no production guard, because the seed never runs in the image; add one (or a SEED_RESET_ADMIN flag) before go-live.
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
@@ -22,15 +23,18 @@ async function main() {
   }
   const role = await db.role.findUniqueOrThrow({ where: { name: "Administrador" } });
 
+  const passwordHash = await hashPassword(password);
   await db.user.upsert({
     where: { username: "admin" },
-    update: {},
+    // Keep admin login aligned with SEED_* in .env when seed is re-run (login never reads .env).
+    update: { email, passwordHash, mustChangePassword: false },
     create: {
       fullName: "Administrador",
       username: "admin",
       email,
-      passwordHash: await hashPassword(password),
+      passwordHash,
       roleId: role.id,
+      mustChangePassword: false,
     },
   });
 

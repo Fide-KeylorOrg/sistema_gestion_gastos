@@ -24,7 +24,7 @@ app:
 migrate: up
 	npx prisma migrate dev $(if $(name),--name $(name))
 
-# Create the fixed roles and the "admin" user (password from SEED_ADMIN_PASSWORD in .env). Safe to re-run.
+# Create the fixed roles and the "admin" user (password from SEED_ADMIN_PASSWORD in .env). Re-running resets the admin's email and password to the .env values.
 seed: up
 	npx prisma db seed
 
